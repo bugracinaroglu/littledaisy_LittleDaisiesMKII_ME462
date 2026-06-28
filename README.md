@@ -67,7 +67,7 @@ Class `Visualizer`: `__init__`, `draw_text_box`, `draw_human`, `draw_emotion`, `
 
 ### `requirements.txt`
 
-Lists the required computer-side Python packages, including NumPy, OpenCV, MediaPipe, DeepFace, TensorFlow, Protobuf, and PySerial.
+Lists the Python packages used by the robot-head project, including NumPy, OpenCV, MediaPipe, DeepFace, TensorFlow, Protobuf, and PySerial. Picamera2 and libcamera are installed through Raspberry Pi OS with `apt`, not through `pip`.
 
 ## Vision Modules
 
@@ -389,33 +389,73 @@ The following settings are in `microcontrollerside/config.py`.
 - Changes the Picamera2 stream format from `BGR888` to `RGB888`.
 - The RP2350 microcontroller code is the same as V3 and V4.
 
-## Python Environment Setup
+## Raspberry Pi 5 Setup (Python 3.11)
+
+The virtual environment is stored outside the repository at:
+
+```text
+~/python_envs/robot_head_shared_envs
+```
+
+Picamera2 and libcamera are installed through Raspberry Pi OS. The virtual environment is created with `--system-site-packages` so it can access them.
+
+### First Installation or Clean Reinstallation
+
+Install the required Raspberry Pi OS packages:
 
 ```bash
-cd ~
-mkdir -p python_envs
-python3 -m venv --system-site-packages ~/python_envs/robot_head_shared_envs
+sudo apt update
+sudo apt install -y \
+    python3-venv \
+    python3-picamera2 \
+    libgl1 \
+    libglib2.0-0 \
+    libportaudio2
+```
+
+To completely recreate the environment, remove the old one first:
+
+```bash
+rm -rf ~/python_envs/robot_head_shared_envs
+```
+
+Create the Python 3.11 environment and install the project requirements:
+
+```bash
+mkdir -p ~/python_envs
+python3.11 -m venv --system-site-packages ~/python_envs/robot_head_shared_envs
 source ~/python_envs/robot_head_shared_envs/bin/activate
-python -m pip install --upgrade pip
+python -m pip install --upgrade pip setuptools wheel
 cd ~/littledaisy_LittleDaisiesMKII_ME462/head_proje_v5/robot_head_project
-python -m pip install -r requirements.txt
+python -m pip install --prefer-binary -r requirements.txt
 ```
 
-## Activate the Environment
+### VS Code Interpreter
+
+In VS Code, press `Ctrl+Shift+P`, select **Python: Select Interpreter**, and choose:
+
+```text
+/home/littledaisy/python_envs/robot_head_shared_envs/bin/python
+```
+
+### Run the Project
+
+For every new terminal session:
 
 ```bash
 source ~/python_envs/robot_head_shared_envs/bin/activate
-```
-
-## Run the Project
-
-```bash
 cd ~/littledaisy_LittleDaisiesMKII_ME462/head_proje_v5/robot_head_project
 python main.py
 ```
 
-## Deactivate the Environment
+To leave the environment:
 
 ```bash
 deactivate
+```
+
+### Quick Import Test
+
+```bash
+python -c "import cv2, mediapipe, tensorflow, serial; from deepface import DeepFace; from picamera2 import Picamera2; print('Environment OK')"
 ```
