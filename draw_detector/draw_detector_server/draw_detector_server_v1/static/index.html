@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>LittleDaisy Drawing</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div id="app">
+        <header>
+            <div class="title">LittleDaisy</div>
+            <div id="status" class="status">Ready</div>
+        </header>
+
+        <div class="toolbar">
+            <button id="tool-pen"          class="tool active"  data-tool="pen">Pen</button>
+            <button id="tool-eraser-stroke" class="tool"        data-tool="eraser-stroke">Stroke Eraser</button>
+            <button id="tool-eraser-pixel"  class="tool"        data-tool="eraser-pixel">Pixel Eraser</button>
+            <button id="btn-clear"          class="tool danger">Clear</button>
+            <button id="btn-detect"         class="tool primary">Detect &amp; Save</button>
+        </div>
+
+        <div class="canvas-wrap">
+            <canvas id="canvas"></canvas>
+        </div>
+
+        <footer>
+            <span id="info">strokes: 0</span>
+            <span id="last-saved"></span>
+        </footer>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

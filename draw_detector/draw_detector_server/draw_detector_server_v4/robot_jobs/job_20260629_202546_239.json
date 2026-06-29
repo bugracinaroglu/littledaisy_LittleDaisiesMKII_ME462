@@ -1,0 +1,22 @@
+{
+  "job_id": "job_20260629_202546_239",
+  "created_at": "2026-06-29T20:25:46.239+03:00",
+  "mode": "full_erase",
+  "reason": "startup",
+  "coordinate_system": "normalized_bottom_left_origin",
+  "source_drawing_id": "robot-empty-state",
+  "target_drawing_id": "robot-empty-state",
+  "stats": {
+    "erase_all": 1,
+    "erase": 0,
+    "draw": 0,
+    "same": 0
+  },
+  "actions": [
+    {
+      "type": "erase_all"
+    }
+  ],
+  "status": "acknowledged",
+  "acknowledged_at": "2026-06-29T20:25:46.241+03:00"
+}

@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LittleDaisy — Drawing Preview</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body {
+            width: 100%; height: 100%; overflow: hidden;
+            background: #1a1a1a; color: #eaeaea;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+        #app {
+            display: flex; flex-direction: column;
+            width: 100vw; height: 100vh; padding: 12px; gap: 12px;
+        }
+        header {
+            display: flex; align-items: center; gap: 12px;
+        }
+        h1 { font-size: 18px; font-weight: 600; }
+        select, button {
+            padding: 8px 12px; font-size: 14px;
+            border: 1px solid #3a3a3a; border-radius: 6px;
+            background: #2a2a2a; color: #eaeaea; cursor: pointer;
+        }
+        button:hover, select:hover { background: #3a3a3a; }
+        button.refresh { background: #4a90e2; border-color: #4a90e2; }
+        .panels {
+            flex: 1; display: flex; gap: 12px; min-height: 0;
+        }
+        .panel {
+            flex: 1; display: flex; flex-direction: column; gap: 6px;
+            min-width: 0; min-height: 0;
+        }
+        .panel-title {
+            font-size: 13px; font-weight: 600; color: #8a8a8a;
+            display: flex; justify-content: space-between;
+        }
+        .canvas-wrap {
+            flex: 1; display: flex; justify-content: center; align-items: center;
+            background: #0f0f0f; border-radius: 6px; padding: 8px;
+            min-height: 0;
+        }
+        canvas {
+            background: white; border-radius: 4px;
+            box-shadow: 0 0 0 1px #3a3a3a;
+            max-width: 100%; max-height: 100%;
+        }
+        #meta {
+            font-size: 12px; color: #8a8a8a; margin-left: auto;
+        }
+        .empty {
+            color: #5a5a5a; font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <header>
+            <h1>Preview</h1>
+            <select id="file-select">
+                <option value="">— select drawing —</option>
+            </select>
+            <button class="refresh" onclick="loadList()">Refresh List</button>
+            <span id="meta"></span>
+        </header>
+
+        <div class="panels">
+            <div class="panel">
+                <div class="panel-title">
+                    <span>RAW</span>
+                    <span id="raw-count" class="empty">—</span>
+                </div>
+                <div class="canvas-wrap">
+                    <canvas id="canvas-raw"></canvas>
+                </div>
+            </div>
+            <div class="panel">
+                <div class="panel-title">
+                    <span>PROCESSED</span>
+                    <span id="proc-count" class="empty">—</span>
+                </div>
+                <div class="canvas-wrap">
+                    <canvas id="canvas-proc"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const fileSelect = document.getElementById('file-select');
+        const meta       = document.getElementById('meta');
+        const rawCount   = document.getElementById('raw-count');
+        const procCount  = document.getElementById('proc-count');
+
+        async function loadList() {
+            try {
+                const res  = await fetch('/api/drawings');
+                const data = await res.json();
+                const prev = fileSelect.value;
+
+                fileSelect.innerHTML = '<option value="">— select drawing —</option>';
+                for (const f of data.files) {
+                    const opt = document.createElement('option');
+                    opt.value = f;
+                    opt.textContent = f;
+                    fileSelect.appendChild(opt);
+                }
+                if (data.files.includes(prev)) fileSelect.value = prev;
+
+                /* Auto-select the newest file if nothing is selected yet */
+                if (!fileSelect.value && data.files.length > 0) {
+                    fileSelect.value = data.files[0];
+                    loadDrawing(data.files[0]);
+                }
+            } catch (e) {
+                console.error(e);
+                meta.textContent = 'Error loading list: ' + e.message;
+            }
+        }
+
+        async function loadDrawing(filename) {
+            if (!filename) {
+                clearCanvas('canvas-raw');
+                clearCanvas('canvas-proc');
+                rawCount.textContent = '—';
+                procCount.textContent = '—';
+                meta.textContent = '';
+                return;
+            }
+            try {
+                const res  = await fetch('/api/drawings/' + encodeURIComponent(filename));
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+
+                const raw  = data.raw_strokes       || [];
+                const proc = data.processed_strokes || [];
+
+                drawOn('canvas-raw',  raw);
+                drawOn('canvas-proc', proc);
+
+                const rawPts  = raw.reduce ((s, st) => s + st.points.length, 0);
+                const procPts = proc.reduce((s, st) => s + st.points.length, 0);
+
+                rawCount.textContent  = `${raw.length} strokes · ${rawPts} pts`;
+                procCount.textContent = `${proc.length} strokes · ${procPts} pts`;
+                rawCount.classList.remove('empty');
+                procCount.classList.remove('empty');
+
+                meta.textContent = `${data.canvas_size_px}px canvas · ${data.timestamp}`;
+            } catch (e) {
+                console.error(e);
+                meta.textContent = 'Error: ' + e.message;
+            }
+        }
+
+        function sizeCanvas(id) {
+            const canvas = document.getElementById(id);
+            const wrap   = canvas.parentElement;
+            const side   = Math.floor(
+                Math.min(wrap.clientWidth, wrap.clientHeight)
+            ) - 8;
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width  = side * dpr;
+            canvas.height = side * dpr;
+            canvas.style.width  = side + 'px';
+            canvas.style.height = side + 'px';
+            const ctx = canvas.getContext('2d');
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.scale(dpr, dpr);
+            return { canvas, ctx, side };
+        }
+
+        function clearCanvas(id) {
+            const { canvas, ctx } = sizeCanvas(id);
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, canvas.clientWidth, canvas.clientHeight);
+        }
+
+        function drawOn(id, strokes) {
+            const { canvas, ctx, side } = sizeCanvas(id);
+
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, side, side);
+
+            ctx.lineCap   = 'round';
+            ctx.lineJoin  = 'round';
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = 'black';
+
+            for (const stroke of strokes) {
+                const pts = stroke.points;
+                if (!pts || pts.length < 1) continue;
+
+                if (pts.length === 1) {
+                    ctx.fillStyle = 'black';
+                    ctx.beginPath();
+                    ctx.arc(pts[0][0] * side, pts[0][1] * side, 1.5, 0, Math.PI * 2);
+                    ctx.fill();
+                    continue;
+                }
+
+                ctx.beginPath();
+                ctx.moveTo(pts[0][0] * side, pts[0][1] * side);
+                for (let i = 1; i < pts.length; i++) {
+                    ctx.lineTo(pts[i][0] * side, pts[i][1] * side);
+                }
+                ctx.stroke();
+            }
+        }
+
+        fileSelect.addEventListener('change', (e) => loadDrawing(e.target.value));
+        window.addEventListener('resize', () => loadDrawing(fileSelect.value));
+
+        /* Initial load + auto-refresh list every 3s so new drawings appear
+           without needing to hit the Refresh button manually. */
+        loadList();
+        setInterval(loadList, 3000);
+    </script>
+</body>
+</html>
