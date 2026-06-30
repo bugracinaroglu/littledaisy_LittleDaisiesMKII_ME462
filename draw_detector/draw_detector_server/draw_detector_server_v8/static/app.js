@@ -117,34 +117,49 @@ function queuePreviewUpdate() {
     }, PREVIEW_SEND_INTERVAL_MS);
 }
 
-
 /* ---------- canvas sizing ---------- */
- 
-/* Desired drawing surface aspect ratio.
- * ASPECT_W : ASPECT_H  — change these two numbers to match your paper/surface.
- * Examples:  1:1 (square),  4:3,  16:9,  210:297 (A4 portrait) */
-const ASPECT_W = 4;
-const ASPECT_H = 3;
- 
+
+/* Aspect ratio is fetched from the server (/config) at startup so that
+ * config.py is the single source of truth. Defaults to 1:1 until loaded. */
+let ASPECT_W = 1;
+let ASPECT_H = 1;
+
+async function loadConfig() {
+    try {
+        const res = await fetch('/config');
+        const cfg = await res.json();
+        ASPECT_W = cfg.canvas_aspect_w;
+        ASPECT_H = cfg.canvas_aspect_h;
+    } catch (e) {
+        console.warn('Could not load /config, using 1:1 default.', e);
+    }
+    resizeCanvas();
+}
+
 function resizeCanvas() {
     /* Fit the canvas inside the wrap container while preserving ASPECT_W:ASPECT_H.
-     * Works like CSS object-fit:contain — whichever dimension hits the edge first
-     * determines the size; the other dimension is scaled proportionally. */
+     * getBoundingClientRect gives the post-layout size, which is accurate even
+     * on the first paint and after orientation changes. */
     const wrap = document.querySelector('.canvas-wrap');
-    const availW = wrap.clientWidth  - 4;
-    const availH = wrap.clientHeight - 4;
- 
+    const rect  = wrap.getBoundingClientRect();
+    const availW = Math.floor(rect.width);
+    const availH = Math.floor(rect.height);
+
     let w, h;
-    if (availW / availH < ASPECT_W / ASPECT_H) {
+    if (ASPECT_W === 0 || ASPECT_H === 0) {
+        /* 0:0 means "fill the wrap completely" — no letterboxing */
+        w = availW;
+        h = availH;
+    } else if (availW / availH < ASPECT_W / ASPECT_H) {
         /* container is taller than the ratio → width is the limiting side */
-        w = Math.floor(availW);
+        w = availW;
         h = Math.floor(w * ASPECT_H / ASPECT_W);
     } else {
         /* container is wider than the ratio → height is the limiting side */
-        h = Math.floor(availH);
+        h = availH;
         w = Math.floor(h * ASPECT_W / ASPECT_H);
     }
- 
+
     /* Use devicePixelRatio for crisp lines on Retina/HiDPI */
     const dpr = window.devicePixelRatio || 1;
     canvas.width  = w * dpr;
@@ -153,49 +168,9 @@ function resizeCanvas() {
     canvas.style.height = h + 'px';
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.scale(dpr, dpr);
- 
+
     redraw();
 }
-
-// /* ---------- canvas sizing ---------- */
-
-// function resizeCanvas() {
-//     /* 1:1 square, sized to the shorter side of the wrap container */
-//     const wrap = document.querySelector('.canvas-wrap');
-//     const side = Math.floor(Math.min(wrap.clientWidth, wrap.clientHeight)) - 4;
-
-//     /* Use devicePixelRatio for crisp lines on Retina/HiDPI */
-//     // const dpr = window.devicePixelRatio || 1;
-//     // canvas.width  = side * dpr;
-//     // canvas.height = side * dpr;
-//     // canvas.style.width  = side + 'px';
-//     // canvas.style.height = side + 'px';
-
-//     // A4 size
-
-//     const dpr = window.devicePixelRatio || 1;
-//     const w = Math.floor(wrap.clientWidth) - 4;
-//     const h = Math.floor(w * 1.414);   // A4 portrait
-//     canvas.width  = w * dpr;
-//     canvas.height = h * dpr;
-//     canvas.style.width  = w + 'px';
-//     canvas.style.height = h + 'px';
-
-//     // Fixed size
-
-//     // canvas.width  = 800 * dpr;
-//     // canvas.height = 600 * dpr;
-//     // canvas.style.width  = '800px';
-//     // canvas.style.height = '600px';
-
-
-
-
-//     ctx.setTransform(1, 0, 0, 1, 0, 0);
-//     ctx.scale(dpr, dpr);
-
-//     redraw();
-// }
 
 window.addEventListener('resize',           resizeCanvas);
 window.addEventListener('orientationchange', resizeCanvas);
@@ -521,4 +496,4 @@ document.getElementById('btn-detect').addEventListener('click', async () => {
 
 connectPreviewSocket();
 setTool('pen');
-resizeCanvas();
+loadConfig();   /* fetches aspect ratio from /config, then calls resizeCanvas() */

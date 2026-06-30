@@ -1,0 +1,108 @@
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #1a1a1a;
+    color: #eaeaea;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    overscroll-behavior: none;
+    touch-action: none;
+}
+
+#app {
+    display: flex;
+    flex-direction: column;
+    width: 100vw;
+    height: 100vh;
+    padding: 8px;
+    gap: 8px;
+}
+
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 8px;
+}
+
+.title {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+.status {
+    font-size: 13px;
+    color: #8a8a8a;
+    padding: 4px 10px;
+    border-radius: 12px;
+    background: #2a2a2a;
+}
+
+.status.working { color: #ffb84d; }
+.status.ok      { color: #6cd66c; }
+.status.err     { color: #ff6464; }
+
+.toolbar {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.tool {
+    flex: 1;
+    min-width: 0;
+    padding: 12px 8px;
+    font-size: 14px;
+    border: 1px solid #3a3a3a;
+    border-radius: 8px;
+    background: #2a2a2a;
+    color: #eaeaea;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.tool:active     { background: #3a3a3a; }
+.tool.active     { background: #4a90e2; border-color: #4a90e2; color: white; }
+.tool.primary    { background: #2d8a3e; border-color: #2d8a3e; color: white; }
+.tool.primary:active { background: #1f6b2d; }
+.tool.danger     { background: #8a2d2d; border-color: #8a2d2d; color: white; }
+.tool.danger:active  { background: #6b1f1f; }
+
+.canvas-wrap {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: #1a1a1a;
+    min-height: 0;
+    min-width: 0;
+    overflow: hidden;
+}
+
+#canvas {
+    background: white;
+    border-radius: 4px;
+    box-shadow: 0 0 0 1px #3a3a3a;
+    touch-action: none;
+    cursor: crosshair;
+}
+
+footer {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 8px;
+    font-size: 12px;
+    color: #8a8a8a;
+}
