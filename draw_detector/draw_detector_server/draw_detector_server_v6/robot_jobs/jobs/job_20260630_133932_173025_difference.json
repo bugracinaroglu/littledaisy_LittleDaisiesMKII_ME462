@@ -1,20 +1,14 @@
 {
-  "schema_version": 2,
-  "drawing_id": "drawing_20260629_213456_204",
-  "timestamp": "2026-06-29T21:34:56.204+03:00",
-  "canvas_size_px": 609,
-  "canvas_aspect": [
-    1,
-    1
-  ],
+  "job_id": "job_20260630_133932_173025_difference",
+  "created_at": "2026-06-30T13:39:32.172+03:00",
+  "mode": "difference",
   "coordinate_system": "normalized_bottom_left_origin",
-  "processing": {
-    "mode": "raw",
-    "smoothing_passes": 0,
-    "simplify_epsilon": 0.0002
-  },
-  "strokes": [
+  "target_drawing_id": "drawing_20260630_133918_699",
+  "target_file": "drawing_20260630_133918_699.json",
+  "status": "completed",
+  "actions": [
     {
+      "type": "draw",
       "stroke_id": "stroke-1782758076373-8",
       "points": [
         [
@@ -1613,9 +1607,11 @@
           0.47908224234292146,
           0.743613477587
         ]
-      ]
+      ],
+      "reason": "new_or_replacement_segment"
     },
     {
+      "type": "draw",
       "stroke_id": "stroke-1782758078685-9",
       "points": [
         [
@@ -2686,9 +2682,11 @@
           0.5085807687392446,
           0.742138551267
         ]
-      ]
+      ],
+      "reason": "new_or_replacement_segment"
     },
     {
+      "type": "draw",
       "stroke_id": "stroke-1782758080034-10",
       "points": [
         [
@@ -3999,9 +3997,11 @@
           0.5705276741715232,
           0.674291940556
         ]
-      ]
+      ],
+      "reason": "new_or_replacement_segment"
     },
     {
+      "type": "draw",
       "stroke_id": "stroke-1782758081367-11",
       "points": [
         [
@@ -5364,9 +5364,11 @@
           0.5159554003383254,
           0.610132645644
         ]
-      ]
+      ],
+      "reason": "new_or_replacement_segment"
     },
     {
+      "type": "draw",
       "stroke_id": "stroke-1782758083000-12",
       "points": [
         [
@@ -6945,9 +6947,11 @@
           0.42672235798944785,
           0.618244740403
         ]
-      ]
+      ],
+      "reason": "new_or_replacement_segment"
     },
     {
+      "type": "draw",
       "stroke_id": "stroke-1782758084599-13",
       "points": [
         [
@@ -8302,9 +8306,11 @@
           0.43262206326871244,
           0.735501382828
         ]
-      ]
+      ],
+      "reason": "new_or_replacement_segment"
     },
     {
+      "type": "draw",
       "stroke_id": "stroke-1782758089865-14",
       "points": [
         [
@@ -9307,9 +9313,11 @@
           0.5911766426489493,
           0.250988086768
         ]
-      ]
+      ],
+      "reason": "new_or_replacement_segment"
     },
     {
+      "type": "draw",
       "stroke_id": "stroke-1782758090780-15",
       "points": [
         [
@@ -10252,9 +10260,11 @@
           0.6332120427637097,
           0.246563307809
         ]
-      ]
+      ],
+      "reason": "new_or_replacement_segment"
     },
     {
+      "type": "draw",
       "stroke_id": "stroke-1782758092063-16",
       "points": [
         [
@@ -11337,9 +11347,11 @@
           0.615512926925916,
           0.39995564507
         ]
-      ]
+      ],
+      "reason": "new_or_replacement_segment"
     },
     {
+      "type": "draw",
       "stroke_id": "stroke-1782758093978-17",
       "points": [
         [
@@ -12330,7 +12342,18 @@
           0.5801146952503282,
           0.382256529232
         ]
-      ]
+      ],
+      "reason": "new_or_replacement_segment"
     }
-  ]
+  ],
+  "job_file": "jobs/job_20260630_133932_173025_difference.json",
+  "started_at": "2026-06-30T13:39:32.281+03:00",
+  "source_drawing_id": "robot-empty-state",
+  "stats": {
+    "erase_all": 0,
+    "erase": 0,
+    "draw": 10,
+    "same": 0
+  },
+  "acknowledged_at": "2026-06-30T13:39:32.356+03:00"
 }
