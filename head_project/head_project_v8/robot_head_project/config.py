@@ -59,17 +59,17 @@ REQUIRE_CALIBRATION = True
 
 ENABLE_HEAD_TRACKING = True
 ENABLE_UP_DOWN_HUMAN_TRACKING = True
-ENABLE_ARM_WAVE = True
+ENABLE_ARM_WAVE = False
 ENABLE_LCD_FACE = True
 
 HEAD_PAN_SERVO_ENABLED = True
 HEAD_TILT_SERVO_ENABLED = True
-ARM_SERVOS_ENABLED = True
+ARM_SERVOS_ENABLED = False
 LCD_ENABLED = True
 
 ENABLE_HUMAN_TRACKING = True
-ENABLE_EMOTION = True
-ENABLE_GESTURE = True
+ENABLE_EMOTION = True  
+ENABLE_GESTURE = False
 ENABLE_SERIAL = True
 
 # =====================================================
@@ -134,7 +134,7 @@ MIN_FACE_WIDTH_PIXELS = 30.0
 # Camera coordinates: +X right, +Y down, +Z forward.
 # The default says the head pivot is 20 cm above the fixed camera.
 HEAD_PIVOT_OFFSET_X_M = 0.00
-HEAD_PIVOT_OFFSET_Y_M = -0.20
+HEAD_PIVOT_OFFSET_Y_M = -0.30
 HEAD_PIVOT_OFFSET_Z_M = 0.00
 
 # Small installation corrections. Leave at zero first, then tune if required.
@@ -156,13 +156,13 @@ CONTROL_REVERSE_X = False
 # Head tilt servo
 # =====================================================
 
-HEAD_TILT_CENTER_ANGLE = 90.0
-HEAD_TILT_MIN_ANGLE = 73.0
-HEAD_TILT_MAX_ANGLE = 105.0
+HEAD_TILT_CENTER_ANGLE = 40
+HEAD_TILT_MIN_ANGLE = 25
+HEAD_TILT_MAX_ANGLE = 60.0
 # The smaller side around the 90-degree neutral is 15 degrees.
 HEAD_TILT_SOFT_LIMIT_FROM_CENTER_DEG = 15.0
 HEAD_TILT_SERVO_DIRECTION = 1
-CONTROL_REVERSE_Y = False
+CONTROL_REVERSE_Y = True
 
 # =====================================================
 # Smooth pan/tilt tracking
