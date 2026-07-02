@@ -56,6 +56,12 @@ MIN_STROKE_LENGTH = 0.0
 # Coordinate convention written to every output drawing JSON.
 OUTPUT_COORDINATE_SYSTEM = "normalized_bottom_left_origin"
 
+# Physical constraints for smart macro wiping
+BOARD_WIDTH_M = 1.00
+BOARD_HEIGHT_M = 0.35
+SQUEEGEE_WIDTH_M = 0.15
+MACRO_WIPE_THRESHOLD_M = 0.05
+
 # Robot job planning
 # Can be changed at runtime with: set_mode difference / set_mode full_redraw
 DEFAULT_ROBOT_JOB_MODE = "difference"
@@ -76,11 +82,11 @@ RESET_ROBOT_JOBS_ON_START = True
 # {"type": "erase_all"}. The physical erase path is intentionally NOT defined
 # here; it belongs to the future robot-controller/transport implementation.
 # Disable this only when the physical drawing surface is already known to be empty.
-STARTUP_FULL_ERASE_ENABLED = True
+STARTUP_FULL_ERASE_ENABLED = False
 
 # Until a physical robot transport is connected, the terminal command simulates
 # a successful robot acknowledgement and commits the target drawing state.
-SIMULATE_ROBOT_ACK = True
+SIMULATE_ROBOT_ACK = False
 
 # Robot queue worker
 ROBOT_QUEUE_POLL_INTERVAL_SEC = 0.10
