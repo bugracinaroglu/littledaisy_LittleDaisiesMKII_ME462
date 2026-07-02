@@ -33,6 +33,7 @@ FRAME_HEIGHT = 972
 FLIP_FRAME_HORIZONTAL = True
 FLIP_FRAME_VERTICAL = False
 WINDOW_NAME = "Robot Head v6 - Fixed Camera Pan/Tilt"
+HEADLESS_MODE = _env_bool("ROBOT_HEAD_HEADLESS", True)
 
 # =====================================================
 # On-screen status panel

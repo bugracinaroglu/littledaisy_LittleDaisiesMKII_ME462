@@ -447,8 +447,11 @@ def main():
                     panel_width=STATUS_PANEL_WIDTH,
                 )
 
-            cv2.imshow(WINDOW_NAME, output)
-            key = cv2.waitKey(1) & 0xFF
+            if not HEADLESS_MODE:
+                cv2.imshow(WINDOW_NAME, output)
+                key = cv2.waitKey(1) & 0xFF
+            else:
+                key = 255
 
             if key == ord("q"):
                 break
@@ -555,7 +558,8 @@ def main():
             gesture_detector.close()
         command_sender.close()
         camera.release()
-        cv2.destroyAllWindows()
+        if not HEADLESS_MODE:
+            cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":
