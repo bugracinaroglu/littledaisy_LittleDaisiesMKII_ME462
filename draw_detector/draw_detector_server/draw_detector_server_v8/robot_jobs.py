@@ -405,7 +405,343 @@ def build_difference_actions(previous: Drawing, current: Drawing) -> List[Action
         draw.append(action)
 
     # Erase first, then draw. `same` is retained for preview/logging only.
-    return erase + draw + same
+    smart_erase = _smart_erase_consolidation(erase, draw, same)
+    return smart_erase + draw + same
+
+def _smart_erase_consolidation(erase: List[Action], draw: List[Action], same: List[Action]) -> List[Action]:
+    if not erase:
+        return []
+        
+    import math
+    try:
+        from shapely.geometry import Point, LineString, Polygon
+        from shapely.ops import unary_union
+    except ImportError:
+        print("[WARNING] 'shapely' is not installed! pip install shapely to enable the Delete Solver.")
+        return erase # Return raw erase actions without consolidation
+        
+    # Gather all surviving points into a Shapely Obstacle geometry
+    obstacle_geoms = []
+    for action in draw + same:
+        pts = action.get("points", [])
+        if len(pts) >= 2:
+            physical_pts = [(p[0] * config.BOARD_WIDTH_M, p[1] * config.BOARD_HEIGHT_M) for p in pts]
+            obstacle_geoms.append(LineString(physical_pts))
+        elif len(pts) == 1:
+            p = pts[0]
+            obstacle_geoms.append(Point(p[0] * config.BOARD_WIDTH_M, p[1] * config.BOARD_HEIGHT_M))
+            
+    if obstacle_geoms:
+        # Buffer by 2.5mm to represent 5mm pen thickness footprint
+        obstacles = unary_union(obstacle_geoms).buffer(0.0025)
+    else:
+        obstacles = Polygon() # Empty
+        
+    # Helper to calculate the exact swept volume convex hull of a moving rectangle
+    def swept_poly(p1x, p1y, p2x, p2y, w, t):
+        dx = p2x - p1x
+        dy = p2y - p1y
+        angle = math.atan2(dy, dx) if (dx!=0 or dy!=0) else 0
+        pa = angle + math.pi/2
+        hl = w/2.0
+        ht = t/2.0
+        v_px, v_py = math.cos(pa)*hl, math.sin(pa)*hl
+        v_nx, v_ny = math.cos(angle)*ht, math.sin(angle)*ht
+        r1 = Polygon([(p1x+v_px+v_nx, p1y+v_py+v_ny), (p1x-v_px+v_nx, p1y-v_py+v_ny), (p1x-v_px-v_nx, p1y-v_py-v_ny), (p1x+v_px-v_nx, p1y+v_py-v_ny)])
+        r2 = Polygon([(p2x+v_px+v_nx, p2y+v_py+v_ny), (p2x-v_px+v_nx, p2y-v_py+v_ny), (p2x-v_px-v_nx, p2y-v_py-v_ny), (p2x+v_px-v_nx, p2y+v_py-v_ny)])
+        return unary_union([r1, r2]).convex_hull
+        
+    smart_erase_actions: List[Action] = []
+    
+    for e_action in erase:
+        pts = e_action.get("points", [])
+        if len(pts) < 2:
+            smart_erase_actions.append(e_action)
+            continue
+            
+        xs = [p[0] * config.BOARD_WIDTH_M for p in pts]
+        ys = [p[1] * config.BOARD_HEIGHT_M for p in pts]
+        min_x, max_x = min(xs), max(xs)
+        min_y, max_y = min(ys), max(ys)
+        
+        width = max_x - min_x
+        height = max_y - min_y
+        
+        # Tool Dimensions
+        squeegee_width = 0.15 # 15cm wide tool
+        squeegee_thick = 0.02 # 2cm thick
+        
+        # STRATEGY 1 & 2: Macro Lawnmower Sweeps
+        # ONLY trigger if the deleted area is a MASSIVE 2D block (both width and height are large).
+        # We do not use this for straight lines! Straight lines must be cross-hatched.
+        if width > config.MACRO_WIPE_THRESHOLD_M and height > config.MACRO_WIPE_THRESHOLD_M:
+            
+            # STRATEGY 1: Horizontal Squeegee Lawnmower
+            num_h_sweeps = max(1, int(math.ceil(height / 0.14)))
+            h_safe = True
+            h_actions = []
+            
+            for j in range(num_h_sweeps):
+                # Start the center so the edge hits min_y exactly
+                sweep_y = min_y + 0.075 + (j * 0.14)
+                # Cap the last sweep so we don't go unnecessarily far out of bounds
+                if sweep_y > max_y - 0.075 and j > 0:
+                    sweep_y = max_y - 0.075
+                    
+                p1x, p1y = min_x, sweep_y
+                p2x, p2y = max_x, sweep_y
+                
+                hsweep = swept_poly(p1x, p1y, p2x, p2y, squeegee_width, squeegee_thick)
+                if hsweep.intersects(obstacles):
+                    h_safe = False
+                    break
+                    
+                norm_y = sweep_y / config.BOARD_HEIGHT_M
+                norm_x1 = min_x / config.BOARD_WIDTH_M
+                norm_x2 = max_x / config.BOARD_WIDTH_M
+                
+                # Alternate direction to optimize robot travel
+                pts = [[norm_x1, norm_y], [norm_x2, norm_y]] if j % 2 == 0 else [[norm_x2, norm_y], [norm_x1, norm_y]]
+                
+                h_actions.append({
+                    "type": "erase_squeegee",
+                    "stroke_id": e_action.get("stroke_id", "") + f"_macro_h_{j}",
+                    "points": pts,
+                    "reason": "shapely_safe_macro_horizontal"
+                })
+                
+            if h_safe and len(h_actions) > 0:
+                smart_erase_actions.extend(h_actions)
+                continue
+                
+            # STRATEGY 2: Vertical Squeegee Lawnmower
+            num_v_sweeps = max(1, int(math.ceil(width / 0.14)))
+            v_safe = True
+            v_actions = []
+            
+            for j in range(num_v_sweeps):
+                sweep_x = min_x + 0.075 + (j * 0.14)
+                if sweep_x > max_x - 0.075 and j > 0:
+                    sweep_x = max_x - 0.075
+                    
+                p1x, p1y = sweep_x, min_y
+                p2x, p2y = sweep_x, max_y
+                
+                vsweep = swept_poly(p1x, p1y, p2x, p2y, squeegee_width, squeegee_thick)
+                if vsweep.intersects(obstacles):
+                    v_safe = False
+                    break
+                    
+                norm_x = sweep_x / config.BOARD_WIDTH_M
+                norm_y1 = min_y / config.BOARD_HEIGHT_M
+                norm_y2 = max_y / config.BOARD_HEIGHT_M
+                
+                # Alternate direction
+                pts = [[norm_x, norm_y1], [norm_x, norm_y2]] if j % 2 == 0 else [[norm_x, norm_y2], [norm_x, norm_y1]]
+                
+                v_actions.append({
+                    "type": "erase_squeegee",
+                    "stroke_id": e_action.get("stroke_id", "") + f"_macro_v_{j}",
+                    "points": pts,
+                    "reason": "shapely_safe_macro_vertical"
+                })
+                
+            if v_safe and len(v_actions) > 0:
+                smart_erase_actions.extend(v_actions)
+                continue
+                
+        # STRATEGY 3: Hybrid Adaptive Trace (Squeegee Sliding Trick -> Finger Auto-Shifting)
+        # This unified loop elegantly downshifts from Squeegee to Finger based on local collisions!
+        
+        # Calculate Straightness Ratio
+        total_path_length = 0.0
+        for i in range(1, len(xs)):
+            total_path_length += math.hypot(xs[i] - xs[i-1], ys[i] - ys[i-1])
+            
+        euclidean_dist = math.hypot(xs[-1] - xs[0], ys[-1] - ys[0])
+        straightness = euclidean_dist / total_path_length if total_path_length > 0 else 1.0
+        
+        # Unconditional Squeegee Stepping (4cm as requested)
+        sq_step_dist = 0.04
+        
+        # Resample entire path to 2cm resolution for finger zigzag step distance
+        step_size = 0.02
+        resampled_pts = [(xs[0], ys[0])]
+        current_dist = 0.0
+        target_dist = step_size
+        
+        for i in range(1, len(xs)):
+            p1x, p1y = xs[i-1], ys[i-1]
+            p2x, p2y = xs[i], ys[i]
+            segment_len = math.hypot(p2x - p1x, p2y - p1y)
+            
+            while current_dist + segment_len >= target_dist:
+                overshoot = target_dist - current_dist
+                t = overshoot / segment_len if segment_len > 0 else 0
+                nx = p1x + t * (p2x - p1x)
+                ny = p1y + t * (p2y - p1y)
+                resampled_pts.append((nx, ny))
+                target_dist += step_size
+            
+            current_dist += segment_len
+            
+        # Ensure the tail end is covered
+        last_rx, last_ry = resampled_pts[-1]
+        if math.hypot(xs[-1] - last_rx, ys[-1] - last_ry) > 0.005:
+            resampled_pts.append((xs[-1], ys[-1]))
+            
+        # Tool specs
+        finger_width = 0.02
+        finger_thick = 0.005
+        sweep_radius_sq = 0.03 # 3cm radius -> 6cm total squeegee sweep
+        sweep_radius_fg = 0.02 # 2cm radius -> 4cm total finger sweep
+        
+        sq_step_points = max(1, int(sq_step_dist / step_size))
+        
+        # We group the actions by tool to minimize physical tool changes on the UR5e!
+        hybrid_sq_actions = []
+        hybrid_fg_actions = []
+        
+        i = 0
+        while i < len(resampled_pts) - 1:
+            # 1. ATTEMPT SQUEEGEE FOR THIS BLOCK
+            end_idx_sq = min(i + sq_step_points, len(resampled_pts) - 1)
+            p_start_sq = resampled_pts[i]
+            p_end_sq = resampled_pts[end_idx_sq]
+            
+            seg_dx = p_end_sq[0] - p_start_sq[0]
+            seg_dy = p_end_sq[1] - p_start_sq[1]
+            seg_length = math.hypot(seg_dx, seg_dy)
+            
+            cx = (p_start_sq[0] + p_end_sq[0]) / 2.0
+            cy = (p_start_sq[1] + p_end_sq[1]) / 2.0
+            
+            ux = seg_dx / seg_length if seg_length > 0 else 0
+            uy = seg_dy / seg_length if seg_length > 0 else 0
+            
+            # The distance to shift the squeegee center to perfectly align its edges
+            shift_dist = (squeegee_width - seg_length) / 2.0
+            if shift_dist < 0: shift_dist = 0
+            
+            # 3 Possible Squeegee Placements (Sliding Trick)
+            test_centers = [
+                (cx, cy), # Centered (equally distributed overhang)
+                (cx + ux * shift_dist, cy + uy * shift_dist), # Shifted Forward (back edge aligned)
+                (cx - ux * shift_dist, cy - uy * shift_dist)  # Shifted Backward (front edge aligned)
+            ]
+            
+            angle = math.atan2(seg_dy, seg_dx) if (seg_dx!=0 or seg_dy!=0) else 0
+            perp_angle = angle + math.pi / 2
+            v_px_sq = math.cos(perp_angle) * sweep_radius_sq
+            v_py_sq = math.sin(perp_angle) * sweep_radius_sq
+            
+            sq_safe = False
+            for tcx, tcy in test_centers:
+                start_x_sq = tcx + v_px_sq
+                start_y_sq = tcy + v_py_sq
+                end_x_sq = tcx - v_px_sq
+                end_y_sq = tcy - v_py_sq
+                
+                ssweep = swept_poly(start_x_sq, start_y_sq, end_x_sq, end_y_sq, squeegee_width, squeegee_thick)
+                if not ssweep.intersects(obstacles):
+                    norm_sx = start_x_sq / config.BOARD_WIDTH_M
+                    norm_sy = start_y_sq / config.BOARD_HEIGHT_M
+                    norm_ex = end_x_sq / config.BOARD_WIDTH_M
+                    norm_ey = end_y_sq / config.BOARD_HEIGHT_M
+                    
+                    hybrid_sq_actions.append({
+                        "type": "erase_squeegee",
+                        "stroke_id": e_action.get("stroke_id", "") + f"_hybrid_sq_{i}",
+                        "segment_idx": i,
+                        "points": [[norm_sx, norm_sy], [norm_ex, norm_ey]],
+                        "yaw": angle,
+                        "reason": "shapely_hybrid_squeegee"
+                    })
+                    sq_safe = True
+                    break
+                    
+            if sq_safe:
+                i = end_idx_sq
+                continue
+                
+            # 2. ALL 3 SQUEEGEE POSITIONS FAILED! FALLBACK TO FINGER FOR THIS 1CM SEGMENT
+            p_start_fg = resampled_pts[i]
+            p_end_fg = resampled_pts[i+1]
+            
+            cx = (p_start_fg[0] + p_end_fg[0]) / 2.0
+            cy = (p_start_fg[1] + p_end_fg[1]) / 2.0
+            dx = p_end_fg[0] - p_start_fg[0]
+            dy = p_end_fg[1] - p_start_fg[1]
+            
+            angle = math.atan2(dy, dx) if (dx!=0 or dy!=0) else 0
+            perp_angle = angle + math.pi / 2
+            
+            v_px_fg = math.cos(perp_angle) * sweep_radius_fg
+            v_py_fg = math.sin(perp_angle) * sweep_radius_fg
+            
+            start_x_fg = cx + v_px_fg
+            start_y_fg = cy + v_py_fg
+            end_x_fg = cx - v_px_fg
+            end_y_fg = cy - v_py_fg
+            
+            # Note: We execute the finger even if it technically hits obstacles, 
+            # because the finger is the ultimate fallback tool and must erase the sand.
+            norm_sx = start_x_fg / config.BOARD_WIDTH_M
+            norm_sy = start_y_fg / config.BOARD_HEIGHT_M
+            norm_ex = end_x_fg / config.BOARD_WIDTH_M
+            norm_ey = end_y_fg / config.BOARD_HEIGHT_M
+            
+            hybrid_fg_actions.append({
+                "type": "erase_finger",
+                "stroke_id": e_action.get("stroke_id", "") + f"_hybrid_fg_{i}",
+                "segment_idx": i,
+                "points": [[norm_sx, norm_sy], [norm_ex, norm_ey]],
+                "yaw": angle,
+                "reason": "shapely_hybrid_finger"
+            })
+            i += 1
+            
+        def zigzag_group(actions, step_jump):
+            if not actions: return []
+            grouped = []
+            current_group = [actions[0]]
+            for k in range(1, len(actions)):
+                if actions[k]["segment_idx"] == actions[k-1]["segment_idx"] + step_jump:
+                    current_group.append(actions[k])
+                else:
+                    grouped.append(current_group)
+                    current_group = [actions[k]]
+            grouped.append(current_group)
+            
+            final_actions = []
+            for g in grouped:
+                zz_points = []
+                for idx, act in enumerate(g):
+                    pts = act["points"]
+                    if idx % 2 == 1:
+                        zz_points.extend(pts[::-1]) # Reverse for zig-zag
+                    else:
+                        zz_points.extend(pts)
+                
+                first_act = g[0]
+                first_act.pop("segment_idx", None)
+                final_actions.append({
+                    "type": first_act["type"],
+                    "stroke_id": first_act["stroke_id"] + "_zigzag",
+                    "points": zz_points,
+                    "yaw": first_act.get("yaw", 0.0),
+                    "reason": first_act["reason"]
+                })
+            return final_actions
+
+        # Group contiguous sweeps into massive zig-zag paths to prevent hovers!
+        hybrid_fg_actions = zigzag_group(hybrid_fg_actions, 1)
+        hybrid_sq_actions = zigzag_group(hybrid_sq_actions, sq_step_points)
+
+        smart_erase_actions.extend(hybrid_sq_actions)
+        smart_erase_actions.extend(hybrid_fg_actions)
+            
+    return smart_erase_actions
 
 
 def build_full_redraw_actions(current: Drawing) -> List[Action]:
@@ -785,21 +1121,35 @@ class RobotJobManager:
 
     @staticmethod
     def _send_to_transport(job: Dict[str, Any]) -> bool:
-        """Physical robot/ROS integration point.
-
-        Publish either the executable ``job`` dictionary itself, or publish the
-        job file plus the ``latest_job.json`` manifest.  ``erase_all`` contains
-        no trajectory; the robot-controller layer owns that path.
-        """
+        """Physical robot/ROS integration point."""
         if config.SIMULATE_ROBOT_ACK:
             print(
                 "[robot simulation] send -> "
                 f"job={job.get('job_id')} mode={job.get('mode')} stats={job.get('stats', {})}"
             )
             return True
-        raise NotImplementedError(
-            "Connect the ROS/robot transport here and return True only after ACK."
-        )
+            
+        import socket
+        HOST = '127.0.0.1'
+        PORT = 9090
+        try:
+            print(f"[tcp] Sending job {job.get('job_id')} to {HOST}:{PORT}...")
+            with socket.create_connection((HOST, PORT), timeout=10.0) as sock:
+                sock.settimeout(3600.0) # Wait up to 1 hour for robot to physically finish
+                payload = json.dumps(job) + "\n"
+                sock.sendall(payload.encode('utf-8'))
+                
+                response = sock.recv(1024).decode('utf-8').strip()
+                if response == "SUCCESS":
+                    print(f"[tcp] Job {job.get('job_id')} executed successfully by robot.")
+                    return True
+                else:
+                    print(f"[tcp] Robot returned failure: {response}")
+                    return False
+        except Exception as e:
+            print(f"[tcp] Failed to communicate with robot on {HOST}:{PORT}: {e}")
+            return False
+
 
     def queue_counts(self) -> Dict[str, int]:
         with self._queue_lock:
