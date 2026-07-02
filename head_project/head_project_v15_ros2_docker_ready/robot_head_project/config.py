@@ -97,7 +97,7 @@ STARTUP_CONTROL_MODE = os.getenv("ROBOT_HEAD_STARTUP_MODE", "AUTO").strip().uppe
 
 # Optional in-process rclpy bridge. Leave disabled on Raspberry Pi OS when ROS2
 # runs in Docker. It remains available for Ubuntu/native ROS2 installations.
-ENABLE_ROS2_BRIDGE = _env_bool("ROBOT_HEAD_ENABLE_NATIVE_ROS2", False)
+ENABLE_ROS2_BRIDGE = True
 ROS2_NODE_NAME = os.getenv("ROBOT_HEAD_ROS2_NODE_NAME", "robot_head_bridge")
 
 # Docker-ready bridge. The host Pi application owns Picamera2 and the RP2350
