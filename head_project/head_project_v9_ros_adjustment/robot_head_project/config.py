@@ -175,9 +175,9 @@ CONTROL_REVERSE_X = False
 # Head tilt servo
 # =====================================================
 
-HEAD_TILT_CENTER_ANGLE = 40
-HEAD_TILT_MIN_ANGLE = 25
-HEAD_TILT_MAX_ANGLE = 60.0
+HEAD_TILT_CENTER_ANGLE = 90
+HEAD_TILT_MIN_ANGLE = 75
+HEAD_TILT_MAX_ANGLE = 120.0
 # The smaller side around the 90-degree neutral is 15 degrees.
 HEAD_TILT_SOFT_LIMIT_FROM_CENTER_DEG = 15.0
 HEAD_TILT_SERVO_DIRECTION = 1

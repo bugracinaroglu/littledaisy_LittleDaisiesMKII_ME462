@@ -1,0 +1,13 @@
+robot_head_ros_bridge:
+  ros__parameters:
+    bridge_host: "127.0.0.1"
+    bridge_port: 8765
+    bridge_timeout_sec: 1.0
+    status_rate_hz: 2.0
+    auto_switch_to_ros: true
+    default_face_hold_ms: 4000
+    default_text_hold_ms: 4000
+    default_gesture_count: 3
+    default_gesture_hold_ms: 0
+    oopsie_hold_ms: 5000
+    thinking_hold_ms: 4000
