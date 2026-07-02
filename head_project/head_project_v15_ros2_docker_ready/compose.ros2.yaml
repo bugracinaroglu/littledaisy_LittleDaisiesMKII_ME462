@@ -1,0 +1,23 @@
+services:
+  robot_head_ros:
+    build:
+      context: .
+      dockerfile: docker/ros2/Dockerfile
+      args:
+        ROS_DISTRO: ${ROS_DISTRO:-jazzy}
+    image: little-daisy/robot-head-ros:${ROS_DISTRO:-jazzy}
+    container_name: robot_head_ros
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-42}
+      ROS_AUTOMATIC_DISCOVERY_RANGE: ${ROS_AUTOMATIC_DISCOVERY_RANGE:-SUBNET}
+      RMW_IMPLEMENTATION: ${RMW_IMPLEMENTATION:-rmw_fastrtps_cpp}
+      ROBOT_HEAD_BRIDGE_HOST: ${ROBOT_HEAD_BRIDGE_HOST:-127.0.0.1}
+      ROBOT_HEAD_BRIDGE_PORT: ${ROBOT_HEAD_BRIDGE_PORT:-8765}
+      ROBOT_HEAD_AUTO_SWITCH_TO_ROS: ${ROBOT_HEAD_AUTO_SWITCH_TO_ROS:-true}
+    command:
+      - ros2
+      - launch
+      - robot_head_ros
+      - robot_head.launch.py

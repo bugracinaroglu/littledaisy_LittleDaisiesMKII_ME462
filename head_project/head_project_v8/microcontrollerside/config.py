@@ -49,7 +49,7 @@ HEAD_PAN_SERVO_PIN = 28
 # New up-down head servo. GPIO 20 does not overlap the LCD/touch/IMU pins
 # used by rp2350_touch_lcd_128.py, or the existing arm/pan servo pins.
 # Change only this value if your physical wiring uses another free GPIO.
-HEAD_TILT_SERVO_PIN = 20
+HEAD_TILT_SERVO_PIN = 27
 
 # The Raspberry Pi sends the desired HEAD pan angle, centred at 90 degrees.
 # The external 1:1.7 gear pair reverses direction, so the RP2350 converts
@@ -62,16 +62,16 @@ HEAD_PAN_SERVO_NEUTRAL_ANGLE = 90.0
 HEAD_PAN_MIN_LIMIT_ANGLE = 0.0
 HEAD_PAN_MAX_LIMIT_ANGLE = 180.0
 HEAD_PAN_GEAR_RATIO = 1.7
-HEAD_PAN_GEAR_REVERSES_DIRECTION = True
+HEAD_PAN_GEAR_REVERSES_DIRECTION = False
 
 HEAD_PAN_STEP_DEG = 3.0
 HEAD_PAN_MOVE_INTERVAL_MS = 5
 
 # Tilt is directly driven: incoming HEAD_TILT / HEAD_POSE tilt values are
 # physical servo angles and are clamped to the measured safe range.
-HEAD_TILT_NEUTRAL_ANGLE = 90.0
-HEAD_TILT_MIN_LIMIT_ANGLE = 73.0
-HEAD_TILT_MAX_LIMIT_ANGLE = 105.0
+HEAD_TILT_NEUTRAL_ANGLE = 40.0
+HEAD_TILT_MIN_LIMIT_ANGLE = 25.0
+HEAD_TILT_MAX_LIMIT_ANGLE = 60.0
 HEAD_TILT_STEP_DEG = 2.0
 HEAD_TILT_MOVE_INTERVAL_MS = 7
 
@@ -82,8 +82,8 @@ HEAD_PAN_NEUTRAL_ANGLE = HEAD_PAN_SERVO_NEUTRAL_ANGLE
 # Arm servos
 # =====================================================
 
-LEFT_ARM_SERVO_PIN = 26
-RIGHT_ARM_SERVO_PIN = 27
+LEFT_ARM_SERVO_PIN = 16
+RIGHT_ARM_SERVO_PIN = 17
 
 LEFT_ARM_NEUTRAL_ANGLE = 90
 RIGHT_ARM_NEUTRAL_ANGLE = 90

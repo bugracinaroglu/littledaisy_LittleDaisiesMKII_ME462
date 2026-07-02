@@ -1,0 +1,4 @@
+services:
+  robot_head_ros:
+    environment:
+      ROS_DISCOVERY_SERVER: ${ROS_DISCOVERY_SERVER}
