@@ -1,0 +1,22 @@
+{
+  "committed_at": "2026-07-02T07:36:58.964+03:00",
+  "source_job": "job_20260702_073542_393991_difference.json",
+  "source_output_file": "drawing_20260702_073526_254.json",
+  "drawing": {
+    "schema_version": 2,
+    "drawing_id": "drawing_20260702_073526_254",
+    "timestamp": "2026-07-02T07:35:26.254+03:00",
+    "canvas_size_px": 1064,
+    "canvas_aspect": [
+      100,
+      35
+    ],
+    "coordinate_system": "normalized_bottom_left_origin",
+    "processing": {
+      "mode": "raw",
+      "smoothing_passes": 0,
+      "simplify_epsilon": 0.002
+    },
+    "strokes": []
+  }
+}

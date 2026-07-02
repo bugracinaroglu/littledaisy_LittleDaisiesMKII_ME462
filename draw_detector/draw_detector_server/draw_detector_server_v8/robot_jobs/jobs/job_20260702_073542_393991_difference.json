@@ -1,0 +1,36 @@
+{
+  "job_id": "job_20260702_073542_393991_difference",
+  "created_at": "2026-07-02T07:35:42.393+03:00",
+  "mode": "difference",
+  "coordinate_system": "normalized_bottom_left_origin",
+  "target_drawing_id": "drawing_20260702_073526_254",
+  "target_file": "drawing_20260702_073526_254.json",
+  "status": "completed",
+  "actions": [
+    {
+      "type": "erase_squeegee",
+      "stroke_id": "stroke-1782965413751-1_macro_h_0",
+      "points": [
+        [
+          0.2199248120300752,
+          0.5234254992317143
+        ],
+        [
+          0.8444548872180451,
+          0.5234254992317143
+        ]
+      ],
+      "reason": "shapely_safe_macro_horizontal"
+    }
+  ],
+  "job_file": "jobs/job_20260702_073542_393991_difference.json",
+  "started_at": "2026-07-02T07:35:42.455+03:00",
+  "source_drawing_id": "drawing_20260702_072841_549",
+  "stats": {
+    "erase_all": 0,
+    "erase": 0,
+    "draw": 0,
+    "same": 0
+  },
+  "acknowledged_at": "2026-07-02T07:36:58.964+03:00"
+}

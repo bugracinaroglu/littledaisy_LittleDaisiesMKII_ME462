@@ -1,69 +1,39 @@
 {
   "schema_version": 1,
-  "created_at": "2026-07-02T05:59:30.941+03:00",
-  "updated_at": "2026-07-02T06:06:16.343+03:00",
+  "created_at": "2026-07-02T07:28:22.489+03:00",
+  "updated_at": "2026-07-02T07:36:58.983+03:00",
   "queue": [
     {
       "sequence": 1,
-      "job_id": "job_20260702_060202_922993_difference",
-      "job_file": "jobs/job_20260702_060202_922993_difference.json",
+      "job_id": "job_20260702_072853_043870_difference",
+      "job_file": "jobs/job_20260702_072853_043870_difference.json",
       "mode": "difference",
       "status": "failed",
-      "created_at": "2026-07-02T06:02:02.911+03:00",
-      "started_at": "2026-07-02T06:02:02.999+03:00",
-      "finished_at": "2026-07-02T06:02:22.516+03:00"
+      "created_at": "2026-07-02T07:28:53.042+03:00",
+      "started_at": "2026-07-02T07:28:53.200+03:00",
+      "finished_at": "2026-07-02T07:29:03.959+03:00"
     },
     {
       "sequence": 2,
-      "job_id": "job_20260702_060426_846121_difference",
-      "job_file": "jobs/job_20260702_060426_846121_difference.json",
+      "job_id": "job_20260702_073144_883297_difference",
+      "job_file": "jobs/job_20260702_073144_883297_difference.json",
       "mode": "difference",
-      "status": "failed",
-      "created_at": "2026-07-02T06:04:26.844+03:00",
-      "started_at": "2026-07-02T06:04:26.962+03:00",
-      "finished_at": "2026-07-02T06:04:37.137+03:00"
+      "status": "completed",
+      "created_at": "2026-07-02T07:31:44.882+03:00",
+      "started_at": "2026-07-02T07:31:44.947+03:00",
+      "finished_at": "2026-07-02T07:32:47.494+03:00"
     },
     {
       "sequence": 3,
-      "job_id": "job_20260702_060502_510773_difference",
-      "job_file": "jobs/job_20260702_060502_510773_difference.json",
+      "job_id": "job_20260702_073542_393991_difference",
+      "job_file": "jobs/job_20260702_073542_393991_difference.json",
       "mode": "difference",
-      "status": "failed",
-      "created_at": "2026-07-02T06:05:02.510+03:00",
-      "started_at": "2026-07-02T06:05:02.598+03:00",
-      "finished_at": "2026-07-02T06:05:02.787+03:00"
-    },
-    {
-      "sequence": 4,
-      "job_id": "job_20260702_060520_369249_difference",
-      "job_file": "jobs/job_20260702_060520_369249_difference.json",
-      "mode": "difference",
-      "status": "failed",
-      "created_at": "2026-07-02T06:05:20.368+03:00",
-      "started_at": "2026-07-02T06:05:20.493+03:00",
-      "finished_at": "2026-07-02T06:05:32.460+03:00"
-    },
-    {
-      "sequence": 5,
-      "job_id": "job_20260702_060543_985458_difference",
-      "job_file": "jobs/job_20260702_060543_985458_difference.json",
-      "mode": "difference",
-      "status": "failed",
-      "created_at": "2026-07-02T06:05:43.973+03:00",
-      "started_at": "2026-07-02T06:05:44.086+03:00",
-      "finished_at": "2026-07-02T06:05:55.718+03:00"
-    },
-    {
-      "sequence": 6,
-      "job_id": "job_20260702_060605_621530_difference",
-      "job_file": "jobs/job_20260702_060605_621530_difference.json",
-      "mode": "difference",
-      "status": "failed",
-      "created_at": "2026-07-02T06:06:05.616+03:00",
-      "started_at": "2026-07-02T06:06:05.710+03:00",
-      "finished_at": "2026-07-02T06:06:16.343+03:00"
+      "status": "completed",
+      "created_at": "2026-07-02T07:35:42.393+03:00",
+      "started_at": "2026-07-02T07:35:42.435+03:00",
+      "finished_at": "2026-07-02T07:36:58.983+03:00"
     }
   ],
   "active_job_id": null,
-  "last_completed_job_id": null
+  "last_completed_job_id": "job_20260702_073542_393991_difference"
 }
