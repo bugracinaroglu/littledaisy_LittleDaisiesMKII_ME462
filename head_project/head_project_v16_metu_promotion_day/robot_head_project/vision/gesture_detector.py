@@ -1,7 +1,10 @@
 import cv2
 import mediapipe as mp
+from mediapipe.tasks import python
+from mediapipe.tasks.python import vision
 from collections import deque
 import math
+import os
 
 
 class GestureDetector:
@@ -43,15 +46,23 @@ class GestureDetector:
 
         self.open_palm_counts = [0 for _ in range(max_num_hands)]
 
-        self.mp_hands = mp.solutions.hands
+        self.open_palm_counts = [0 for _ in range(max_num_hands)]
 
-        self.hands_detector = self.mp_hands.Hands(
-            static_image_mode=False,
-            max_num_hands=max_num_hands,
-            model_complexity=0,
-            min_detection_confidence=detection_confidence,
+        model_path = os.path.join(
+            os.path.dirname(__file__), 
+            'models', 
+            'gesture_recognizer.task'
+        )
+
+        base_options = python.BaseOptions(model_asset_path=model_path)
+        options = vision.GestureRecognizerOptions(
+            base_options=base_options,
+            num_hands=max_num_hands,
+            min_hand_detection_confidence=detection_confidence,
+            min_hand_presence_confidence=tracking_confidence,
             min_tracking_confidence=tracking_confidence
         )
+        self.recognizer = vision.GestureRecognizer.create_from_options(options)
 
         self.last_result = self._empty_result()
 
@@ -79,43 +90,8 @@ class GestureDetector:
         return cx, cy
 
     def _count_extended_fingers(self, landmarks):
-        """
-        Orientation-friendly finger extension check.
-        It checks whether fingertip is farther from palm center than the lower joint.
-        """
-
-        palm_ids = [0, 5, 9, 13, 17]
-
-        class Dummy:
-            pass
-
-        palm = Dummy()
-        palm.x = sum(landmarks[i].x for i in palm_ids) / len(palm_ids)
-        palm.y = sum(landmarks[i].y for i in palm_ids) / len(palm_ids)
-
-        finger_defs = {
-            "thumb": (4, 3),
-            "index": (8, 6),
-            "middle": (12, 10),
-            "ring": (16, 14),
-            "pinky": (20, 18),
-        }
-
-        states = {}
-        count = 0
-
-        for name, (tip_id, lower_id) in finger_defs.items():
-            tip_dist = self._distance(landmarks[tip_id], palm)
-            lower_dist = self._distance(landmarks[lower_id], palm)
-
-            extended = tip_dist > lower_dist * 1.12
-
-            states[name] = extended
-
-            if extended:
-                count += 1
-
-        return count, states
+        # We no longer calculate this manually. The GestureRecognizer does it.
+        return 0, {}
 
     def _count_direction_changes(self, xs):
         directions = []
@@ -164,11 +140,11 @@ class GestureDetector:
             return self.last_result
 
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        rgb.flags.writeable = False
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
 
-        result = self.hands_detector.process(rgb)
+        result = self.recognizer.recognize(mp_image)
 
-        if not result.multi_hand_landmarks:
+        if not result.hand_landmarks:
             for history in self.x_histories:
                 history.clear()
 
@@ -182,23 +158,29 @@ class GestureDetector:
         any_open_palm = False
         any_hello_event = False
 
-        for hand_index, hand_landmarks in enumerate(result.multi_hand_landmarks):
+        for hand_index, hand_landmarks in enumerate(result.hand_landmarks):
             if hand_index >= self.max_num_hands:
                 break
+            
+            # The recognizer returns a list of NormalizedLandmarks, but we want 
+            # to pass an object with `.landmark` so the old visualizer code is happy.
+            class DummyLandmarkList:
+                def __init__(self, lms):
+                    self.landmark = lms
+            
+            hand_landmarks_obj = DummyLandmarkList(hand_landmarks)
 
-            landmarks = hand_landmarks.landmark
-            center = self._get_hand_center(landmarks)
+            center = self._get_hand_center(hand_landmarks)
 
             self.x_histories[hand_index].append(center[0])
 
             waving, x_range, direction_changes = self._detect_wave(hand_index)
-
-            finger_count, finger_states = self._count_extended_fingers(landmarks)
-
-            open_palm_now = (
-                self.open_palm_enabled and
-                finger_count >= self.open_palm_min_fingers
-            )
+            
+            open_palm_now = False
+            if self.open_palm_enabled and len(result.gestures) > hand_index:
+                gestures = result.gestures[hand_index]
+                if any(g.category_name == "Open_Palm" for g in gestures):
+                    open_palm_now = True
 
             if open_palm_now:
                 self.open_palm_counts[hand_index] += 1
@@ -234,14 +216,14 @@ class GestureDetector:
 
             detected_hands.append({
                 "hand_index": hand_index,
-                "landmarks": hand_landmarks,
+                "landmarks": hand_landmarks_obj,
                 "center_norm": center,
                 "waving": waving,
                 "open_palm": open_palm_confirmed,
                 "hello_event": hello_event,
                 "hello_reason": hello_reason,
-                "finger_count": finger_count,
-                "finger_states": finger_states,
+                "finger_count": 5 if open_palm_confirmed else 0,
+                "finger_states": {},
                 "x_range": x_range,
                 "direction_changes": direction_changes
             })
@@ -257,4 +239,4 @@ class GestureDetector:
         return self.last_result
 
     def close(self):
-        self.hands_detector.close()
+        self.recognizer.close()
