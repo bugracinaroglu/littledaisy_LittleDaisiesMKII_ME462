@@ -132,6 +132,10 @@ class BehaviorManager:
                 if emotion_result is not None and emotion_result.get("ok", False):
                     dominant_emotion = emotion_result.get("dominant")
                 face = self._emotion_to_face(dominant_emotion)
+                
+                # Override with HAPPY face if an open hand is held up
+                if gesture_result is not None and gesture_result.get("open_palm", False):
+                    face = "HAPPY"
 
             commands["face"] = face
             if auto_commands_active and face != self.last_face_sent:
