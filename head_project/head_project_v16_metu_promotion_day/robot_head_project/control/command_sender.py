@@ -164,6 +164,9 @@ class CommandSender:
     def send_cancel_gesture(self):
         return self.send_raw("GESTURE:CANCEL")
 
+    def send_image(self, b64_string):
+        return self.send_raw("IMAGE:{}".format(b64_string))
+
     def send_mode(self, mode_name):
         return self.send_raw("MODE:{}".format(str(mode_name).strip().upper()))
 

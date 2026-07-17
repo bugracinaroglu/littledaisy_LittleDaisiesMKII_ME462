@@ -328,8 +328,16 @@ class HumanTracker:
         ]
         face_center = self._average_points(head_points)
         face_bbox = self._make_bbox_from_points(
-            head_points, frame_width, frame_height, margin=25
+            head_points, frame_width, frame_height, margin=20
         )
+        if face_bbox is not None:
+            # MediaPipe Pose only maps eyes, nose, and ears.
+            # To capture the forehead and chin, we extend the box vertically based on its width.
+            fx1, fy1, fx2, fy2 = face_bbox
+            face_w = fx2 - fx1
+            fy1 = max(0, int(fy1 - face_w * 0.35))
+            fy2 = min(frame_height - 1, int(fy2 + face_w * 0.55))
+            face_bbox = (fx1, fy1, fx2, fy2)
 
         upper_body_center = self._upper_body_center(points)
         body_center = self._bbox_center(body_bbox)

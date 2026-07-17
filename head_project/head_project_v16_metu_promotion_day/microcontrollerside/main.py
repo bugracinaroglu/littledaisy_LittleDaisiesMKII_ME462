@@ -327,6 +327,26 @@ def handle_command(
             set_face_lock(face_state, hold_ms)
             face.show_text(text, hold_ms=hold_ms, italic=italic)
 
+    elif command_type == "IMAGE":
+        import binascii
+        import framebuf
+        try:
+            raw_bytes = binascii.a2b_base64(value)
+            fbuf = framebuf.FrameBuffer(bytearray(raw_bytes), 240, 240, framebuf.MONO_HLSB)
+            
+            # The face renderer usually owns the lcd buffer. We can access lcd globally or pass it.
+            # We don't have direct access to lcd in handle_command, but `face` has `face.lcd`.
+            if face is not None and hasattr(face, "lcd"):
+                lcd_local = face.lcd
+                lcd_local.fill(lcd_local.black)
+                # Blit the 1-bit framebuf. 1 will be drawn as white, 0 as black by default
+                lcd_local.blit(fbuf, 0, 0)
+                lcd_local.show()
+                set_face_lock(face_state, 6000)
+                print("Image rendered")
+        except Exception as e:
+            print("Image decode error:", e)
+
     elif command_type == "GESTURE":
         gesture_name, count, hold_ms = value
         gesture_name = str(gesture_name).strip().upper()

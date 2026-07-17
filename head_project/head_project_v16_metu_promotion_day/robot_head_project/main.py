@@ -1,10 +1,15 @@
 import time
+import math
+import numpy as np
+import base64
 
 import cv2
 
 from behavior.behavior_manager import BehaviorManager
 from camera import Camera
 from config import *
+
+
 from control.command_sender import CommandSender
 from control.control_mode import ControlMode, ControlModeManager
 from control.head_pose_mapper import HeadPoseMapper
@@ -43,6 +48,14 @@ def describe_gesture(gesture_result):
         return "WAVE"
     if gesture_result.get("open_palm", False):
         return "OPEN PALM"
+
+    # Check if any hand has a recognized top gesture
+    hands = gesture_result.get("hands", [])
+    for hand in hands:
+        top = hand.get("top_gesture", "None")
+        if top != "None":
+            return top.upper()
+
     if gesture_result.get("hand_detected", False):
         return "HAND"
     return "NONE"
@@ -134,8 +147,8 @@ def main():
             wave_min_step=WAVE_MIN_STEP,
             open_palm_enabled=OPEN_PALM_ENABLED,
             open_palm_min_fingers=OPEN_PALM_MIN_FINGERS,
-            open_palm_hold_frames=OPEN_PALM_HOLD_FRAMES,
-            hello_cooldown_frames=HELLO_COOLDOWN_FRAMES,
+            open_palm_hold_time_sec=OPEN_PALM_HOLD_TIME_SEC,
+            hello_cooldown_sec=HELLO_COOLDOWN_SEC,
         )
 
     target_selector = TargetSelector(
@@ -259,9 +272,20 @@ def main():
     previous_time = time.time()
     show_status_panel = bool(SHOW_STATUS_PANEL)
 
-    print("Robot Head v16 METU Promotion Day controller started.")
+    print("Robot Head v16 METU Promotion Day controller started (PC DEBUG MODE).")
     print("Initial control mode:", mode_manager.get_mode())
     print_keyboard_help()
+
+    system_started = False
+    face_window_open = False
+    captured_face_image = None
+    captured_edges_image = None
+    last_thumb_up = False
+    last_thumb_down = False
+
+    print("\n[SYSTEM] Currently in STANDBY mode.")
+    print("[SYSTEM] Show a 'Victory' (Peace sign) gesture to start tracking.")
+    print("[SYSTEM] Show an 'ILoveYou' (Spider-Man web) gesture to pause tracking.\n")
 
     try:
         while True:
@@ -270,12 +294,126 @@ def main():
                 print("Frame could not be read.")
                 break
 
-            if human_tracker is not None:
-                human_result = human_tracker.update(frame)
-            if emotion_detector is not None:
-                emotion_result = emotion_detector.update(frame)
             if gesture_detector is not None:
                 gesture_result = gesture_detector.update(frame)
+
+            if gesture_result is not None:
+                for hand in gesture_result.get("hands", []):
+                    top = hand.get("top_gesture", "None")
+                    if top == "Victory" and not system_started:
+                        system_started = True
+                        print("\n[SYSTEM] START UP COMMAND RECEIVED! (Victory Gesture)")
+                        print("[SYSTEM] Starting Human Tracking and Emotion Detection...\n")
+                    elif top == "ILoveYou" and system_started:
+                        system_started = False
+                        print("\n[SYSTEM] STANDBY COMMAND RECEIVED! (ILoveYou Gesture)")
+                        print("[SYSTEM] Pausing Human Tracking and Emotion Detection...\n")
+
+            if system_started:
+                if human_tracker is not None:
+                    human_result = human_tracker.update(frame)
+                if emotion_detector is not None:
+                    face_box = human_result.get("face_bbox") if human_result else None
+                    emotion_result = emotion_detector.update(frame, face_bbox=face_box)
+
+                # --- Face Capture Window Logic ---
+                if gesture_result is not None:
+                    current_thumb_up = False
+                    current_thumb_down = False
+                    for hand in gesture_result.get("hands", []):
+                        top = hand.get("top_gesture", "None")
+                        if top == "Thumb_Up":
+                            current_thumb_up = True
+                        elif top == "Thumb_Down":
+                            current_thumb_down = True
+                            
+                    # Trigger face capture when thumb goes up
+                    if current_thumb_up and not last_thumb_up:
+                        points = human_result.get("points", {}) if human_result else {}
+                        nose = points.get("nose")
+                        left_ear = points.get("left_ear")
+                        right_ear = points.get("right_ear")
+
+                        if nose and (left_ear or right_ear):
+                            cx, cy = nose
+                            if left_ear and right_ear:
+                                radius = int(math.hypot(left_ear[0] - right_ear[0], left_ear[1] - right_ear[1]))
+                            else:
+                                ear = left_ear or right_ear
+                                radius = int(math.hypot(nose[0] - ear[0], nose[1] - ear[1]) * 2)
+                            
+                            h_f, w_f = frame.shape[:2]
+                            x1 = max(0, cx - radius)
+                            y1 = max(0, cy - radius)
+                            x2 = min(w_f, cx + radius)
+                            y2 = min(h_f, cy + radius)
+                            
+                            if x2 > x1 and y2 > y1:
+                                crop = frame[y1:y2, x1:x2].copy()
+                                
+                                # Make it circular by masking
+                                mask = np.zeros_like(crop)
+                                cv2.circle(mask, (cx - x1, cy - y1), radius, (255, 255, 255), -1)
+                                
+                                captured_face_image = cv2.bitwise_and(crop, mask)
+                                captured_edges_image = cv2.Canny(captured_face_image, 100, 200)
+                                face_window_open = True
+                                print("[SYSTEM] Circular face screenshot and edges captured!")
+                                
+                                edge_resized = cv2.resize(captured_edges_image, (240, 240))
+                                binary = (edge_resized > 127).astype(np.uint8)
+                                packed = np.packbits(binary)
+                                b64 = base64.b64encode(packed).decode('utf-8')
+                                command_sender.send_image(b64)
+                        else:
+                            # Fallback to rectangular if landmarks are missing
+                            face_box = None
+                            
+                            if emotion_result is not None and emotion_result.get("ok", False):
+                                region = emotion_result.get("region")
+                                if region:
+                                    face_box = (region["x"], region["y"], region["x"] + region["w"], region["y"] + region["h"])
+                            
+                            if face_box is None and human_result is not None:
+                                face_box = human_result.get("face_bbox")
+    
+                            if face_box is not None:
+                                x1, y1, x2, y2 = face_box
+                                h_f, w_f = frame.shape[:2]
+                                x1, y1 = max(0, int(x1)), max(0, int(y1))
+                                x2, y2 = min(w_f, int(x2)), min(h_f, int(y2))
+                                if x2 > x1 and y2 > y1:
+                                    captured_face_image = frame[y1:y2, x1:x2].copy()
+                                    captured_edges_image = cv2.Canny(captured_face_image, 100, 200)
+                                    face_window_open = True
+                                    print("[SYSTEM] Face screenshot and edges captured!")
+                                    
+                                    edge_resized = cv2.resize(captured_edges_image, (240, 240))
+                                    binary = (edge_resized > 127).astype(np.uint8)
+                                    packed = np.packbits(binary)
+                                    b64 = base64.b64encode(packed).decode('utf-8')
+                                    command_sender.send_image(b64)
+                    
+                    # Close window when thumb goes down
+                    if current_thumb_down and not last_thumb_down:
+                        if face_window_open:
+                            face_window_open = False
+                            captured_face_image = None
+                            captured_edges_image = None
+                            try:
+                                if not HEADLESS_MODE:
+                                    cv2.destroyWindow("Captured Face")
+                                    cv2.destroyWindow("Face Edges")
+                            except Exception:
+                                pass
+                            print("[SYSTEM] Face window closed.")
+                            
+                    last_thumb_up = current_thumb_up
+                    last_thumb_down = current_thumb_down
+                # ---------------------------------
+            else:
+                human_result = None
+                emotion_result = None
 
             selected_target = target_selector.select(
                 human_result=human_result,
@@ -307,6 +445,18 @@ def main():
             )
 
             output = frame.copy()
+            if not system_started:
+                cv2.putText(
+                    output,
+                    "STANDBY: Make 'Victory' gesture to start",
+                    (30, 40),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.8,
+                    (0, 0, 255),
+                    2,
+                    cv2.LINE_AA
+                )
+
             if human_tracker is not None:
                 output = visualizer.draw_human(output, human_result)
             if emotion_detector is not None:
@@ -392,6 +542,10 @@ def main():
 
             if not HEADLESS_MODE:
                 cv2.imshow(WINDOW_NAME, output)
+                if face_window_open and captured_face_image is not None:
+                    cv2.imshow("Captured Face", captured_face_image)
+                    if captured_edges_image is not None:
+                        cv2.imshow("Face Edges", captured_edges_image)
                 key = cv2.waitKey(1) & 0xFF
             else:
                 key = 255

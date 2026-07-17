@@ -247,10 +247,14 @@ class Visualizer:
                     cv2.LINE_AA
                 )
 
+            top_gesture = hand.get("top_gesture", "None")
+
             if open_palm:
                 status = "OPEN PALM"
             elif waving:
                 status = "WAVE"
+            elif top_gesture != "None":
+                status = top_gesture
             else:
                 status = "detected"
 

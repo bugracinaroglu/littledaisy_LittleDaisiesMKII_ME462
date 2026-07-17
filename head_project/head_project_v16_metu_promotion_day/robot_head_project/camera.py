@@ -259,7 +259,7 @@ class Camera:
 
     def get_focal_lengths_pixels(self):
         if self.rectified_camera_matrix is None:
-            return None, None
+            return float(self.width * 0.8), float(self.width * 0.8)
         return (
             float(self.rectified_camera_matrix[0, 0]),
             float(self.rectified_camera_matrix[1, 1]),
@@ -279,14 +279,18 @@ class Camera:
 
     def pixel_to_ray(self, pixel_x, pixel_y):
         """Return the rectified pinhole ray (x/z, y/z, 1) for a final-frame pixel."""
-        if self.rectified_camera_matrix is None:
-            raise RuntimeError("pixel_to_ray requires calibrated fisheye mode.")
-
         x, y = self.final_pixel_to_rectified_pixel(pixel_x, pixel_y)
-        fx = float(self.rectified_camera_matrix[0, 0])
-        fy = float(self.rectified_camera_matrix[1, 1])
-        cx = float(self.rectified_camera_matrix[0, 2])
-        cy = float(self.rectified_camera_matrix[1, 2])
+        
+        if self.rectified_camera_matrix is None:
+            # Fallback to an uncalibrated ~64 degree FOV pinhole model
+            fx = fy = self.width * 0.8
+            cx = self.width / 2.0
+            cy = self.height / 2.0
+        else:
+            fx = float(self.rectified_camera_matrix[0, 0])
+            fy = float(self.rectified_camera_matrix[1, 1])
+            cx = float(self.rectified_camera_matrix[0, 2])
+            cy = float(self.rectified_camera_matrix[1, 2])
 
         ray_x = (x - cx) / fx
         ray_y = (y - cy) / fy

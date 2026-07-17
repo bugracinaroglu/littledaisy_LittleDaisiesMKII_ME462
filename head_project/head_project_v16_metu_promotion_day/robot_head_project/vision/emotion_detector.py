@@ -48,18 +48,38 @@ class EmotionDetector:
 
         return cx / w, cy / h
 
-    def update(self, frame):
+    def update(self, frame, face_bbox=None):
         self.frame_count += 1
 
         if self.frame_count % self.analyze_every_n_frames != 0:
             return self.last_result
 
         try:
+            analyze_frame = frame
+            enforce_detection = self.enforce_detection
+            detector_backend = self.detector_backend
+
+            x1, y1, x2, y2 = 0, 0, 0, 0
+            is_cropped = False
+
+            if face_bbox is not None:
+                x1, y1, x2, y2 = face_bbox
+                h, w = frame.shape[:2]
+                x1, y1 = max(0, int(x1)), max(0, int(y1))
+                x2, y2 = min(w, int(x2)), min(h, int(y2))
+                
+                # Ensure the crop is valid and has some size
+                if x2 - x1 > 20 and y2 - y1 > 20:
+                    analyze_frame = frame[y1:y2, x1:x2]
+                    enforce_detection = False
+                    detector_backend = "skip"
+                    is_cropped = True
+
             result = self.DeepFace.analyze(
-                img_path=frame,
+                img_path=analyze_frame,
                 actions=["emotion"],
-                enforce_detection=self.enforce_detection,
-                detector_backend=self.detector_backend
+                enforce_detection=enforce_detection,
+                detector_backend=detector_backend
             )
 
             if isinstance(result, list):
@@ -67,7 +87,11 @@ class EmotionDetector:
 
             dominant = result.get("dominant_emotion", "Unknown")
             emotion_scores = result.get("emotion", {})
-            region = result.get("region", None)
+            
+            if is_cropped:
+                region = {"x": x1, "y": y1, "w": x2 - x1, "h": y2 - y1}
+            else:
+                region = result.get("region", None)
 
             top_scores = sorted(
                 emotion_scores.items(),

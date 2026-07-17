@@ -5,6 +5,7 @@ from mediapipe.tasks.python import vision
 from collections import deque
 import math
 import os
+import time
 
 
 class GestureDetector:
@@ -20,8 +21,8 @@ class GestureDetector:
         wave_min_step=0.008,
         open_palm_enabled=True,
         open_palm_min_fingers=5,
-        open_palm_hold_frames=4,
-        hello_cooldown_frames=30
+        open_palm_hold_time_sec=2.0,
+        hello_cooldown_sec=2.0
     ):
         self.process_every_n_frames = process_every_n_frames
         self.max_num_hands = max_num_hands
@@ -32,19 +33,19 @@ class GestureDetector:
 
         self.open_palm_enabled = open_palm_enabled
         self.open_palm_min_fingers = open_palm_min_fingers
-        self.open_palm_hold_frames = open_palm_hold_frames
+        self.open_palm_hold_time_sec = open_palm_hold_time_sec
 
-        self.hello_cooldown_frames = hello_cooldown_frames
+        self.hello_cooldown_sec = hello_cooldown_sec
 
         self.frame_count = 0
-        self.last_hello_frame = -9999
+        self.last_hello_time = -9999.0
 
         self.x_histories = [
             deque(maxlen=wave_history_size)
             for _ in range(max_num_hands)
         ]
 
-        self.open_palm_counts = [0 for _ in range(max_num_hands)]
+        self.open_palm_start_times = [None for _ in range(max_num_hands)]
 
         self.open_palm_counts = [0 for _ in range(max_num_hands)]
 
@@ -148,7 +149,7 @@ class GestureDetector:
             for history in self.x_histories:
                 history.clear()
 
-            self.open_palm_counts = [0 for _ in range(self.max_num_hands)]
+            self.open_palm_start_times = [None for _ in range(self.max_num_hands)]
 
             self.last_result = self._empty_result()
             return self.last_result
@@ -176,20 +177,27 @@ class GestureDetector:
 
             waving, x_range, direction_changes = self._detect_wave(hand_index)
             
+            top_gesture = "None"
             open_palm_now = False
             if self.open_palm_enabled and len(result.gestures) > hand_index:
                 gestures = result.gestures[hand_index]
-                if any(g.category_name == "Open_Palm" for g in gestures):
-                    open_palm_now = True
+                if gestures:
+                    # Gestures are usually sorted by score. Take the first one.
+                    top_gesture = gestures[0].category_name
+                    if top_gesture == "Open_Palm":
+                        open_palm_now = True
 
             if open_palm_now:
-                self.open_palm_counts[hand_index] += 1
+                if self.open_palm_start_times[hand_index] is None:
+                    self.open_palm_start_times[hand_index] = time.monotonic()
             else:
-                self.open_palm_counts[hand_index] = 0
+                self.open_palm_start_times[hand_index] = None
 
-            open_palm_confirmed = (
-                self.open_palm_counts[hand_index] >= self.open_palm_hold_frames
-            )
+            open_palm_confirmed = False
+            if self.open_palm_start_times[hand_index] is not None:
+                elapsed = time.monotonic() - self.open_palm_start_times[hand_index]
+                if elapsed >= self.open_palm_hold_time_sec:
+                    open_palm_confirmed = True
 
             hello_event = False
             hello_reason = None
@@ -201,11 +209,11 @@ class GestureDetector:
                 hello_reason = "open_palm"
 
             if hello_reason is not None:
-                frames_since_last_hello = self.frame_count - self.last_hello_frame
+                time_since_last_hello = time.monotonic() - self.last_hello_time
 
-                if frames_since_last_hello >= self.hello_cooldown_frames:
+                if time_since_last_hello >= self.hello_cooldown_sec:
                     hello_event = True
-                    self.last_hello_frame = self.frame_count
+                    self.last_hello_time = time.monotonic()
                     print(
                         f"[Gesture] Hello detected from hand {hand_index + 1}, reason: {hello_reason}"
                     )
@@ -222,6 +230,7 @@ class GestureDetector:
                 "open_palm": open_palm_confirmed,
                 "hello_event": hello_event,
                 "hello_reason": hello_reason,
+                "top_gesture": top_gesture,
                 "finger_count": 5 if open_palm_confirmed else 0,
                 "finger_states": {},
                 "x_range": x_range,

@@ -179,6 +179,9 @@ class SerialParser:
         if upper.startswith("HEAD_ACTION:"):
             return self._parse_gesture(cmd[len("HEAD_ACTION:"):].strip(), cmd)
 
+        if upper.startswith("IMAGE:"):
+            return "IMAGE", cmd[6:].strip()
+
         if upper.startswith("MODE:"):
             return "MODE", cmd[5:].strip().upper()
 
