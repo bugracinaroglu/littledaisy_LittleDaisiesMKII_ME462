@@ -1,0 +1,106 @@
+# --- LITTLE DAISY MKII COMMANDS CHEATSHEET ---
+
+# =================================================================
+# 1. RASPBERRY PI HOST APPLICATION (Run on Pi directly)
+# =================================================================
+
+# Activate your Python virtual environment first:
+source venv/bin/activate  # (Change 'venv' to your actual virtual environment folder)
+cd ~/head_project_v15_ros2_docker_ready/robot_head_project
+python3 main.py
+
+# Or start it directly in ROS mode:
+ROBOT_HEAD_STARTUP_MODE=ROS python3 main.py
+
+
+# =================================================================
+# 2. DOCKER ROS 2 BRIDGE (Run on Pi)
+# =================================================================
+
+# Go to the docker directory
+cd ~/head_project_v15_ros2_docker_ready
+
+# Start the container in the background
+docker compose -f compose.ros2.yaml up -d
+
+# View logs
+docker compose -f compose.ros2.yaml logs -f
+
+# Stop the container
+docker compose -f compose.ros2.yaml stop
+
+# Rebuild and start (if you changed code)
+docker compose -f compose.ros2.yaml up -d --build
+
+
+# =================================================================
+# 3. REMOTE ROS 2 COMPUTER SETUP (Run on your PC)
+# =================================================================
+
+# Source ROS 2 (Assuming Jazzy, replace with your distribution)
+source /opt/ros/jazzy/setup.bash
+export ROS_DOMAIN_ID=42
+export ROS_AUTOMATIC_DISCOVERY_RANGE=SUBNET
+export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+
+# Check if Daisy's bridge is visible
+ros2 node list
+# You should see: /robot_head_ros_bridge
+
+
+# =================================================================
+# 4. ROS 2 TOPIC COMMANDS (Control Daisy)
+# =================================================================
+
+# Switch Daisy to ROS Control Mode
+ros2 topic pub --once /robot_head/control_mode std_msgs/msg/String "{data: 'ROS'}"
+
+# Re-center head
+ros2 topic pub --once /robot_head/center std_msgs/msg/Empty "{}"
+
+# Change Face (Options: NEUTRAL, CURIOUS, HAPPY, SAD, ANGRY, SURPRISED, DISGUST, SLEEPING, IDLE, RUNNING, DIZZY, SIGMA, SUNGLASSES, THINKING)
+ros2 topic pub --once /robot_head/face std_msgs/msg/String "{data: 'THINKING,5000'}"
+
+# Display Text on LCD
+ros2 topic pub --once /robot_head/text std_msgs/msg/String "{data: '5000|false|Hello World'}"
+
+# Trigger a Gesture (Options: NOD, SUNGLASSES_NOD, SIGMA_NOD, SHAKE, LOOK_AROUND, CELEBRATE, DANCE, GREET, DAISY_DANCE, SLEEP, WAKE_UP)
+# Format: 'GESTURE_NAME,count,hold_ms'
+ros2 topic pub --once /robot_head/gesture std_msgs/msg/String "{data: 'DANCE,3,7000'}"
+
+# Move head to specific Pan and Tilt Angles
+ros2 topic pub --once /robot_head/pose std_msgs/msg/Float64MultiArray "{data: [100.0, 95.0]}"
+
+# Trigger specific pre-set animations quickly
+ros2 topic pub --once /robot_head/oopsie_daisy std_msgs/msg/Empty "{}"
+ros2 topic pub --once /robot_head/thinking std_msgs/msg/Empty "{}"
+ros2 topic pub --once /robot_head/arm_wave std_msgs/msg/Empty "{}"
+
+
+# =================================================================
+# 5. ROS 2 SERVICE COMMANDS (Alternative way to trigger)
+# =================================================================
+
+ros2 service call /robot_head/ros_mode_service std_srvs/srv/Trigger "{}"
+ros2 service call /robot_head/center_service std_srvs/srv/Trigger "{}"
+ros2 service call /robot_head/dance_service std_srvs/srv/Trigger "{}"
+ros2 service call /robot_head/greet_service std_srvs/srv/Trigger "{}"
+ros2 service call /robot_head/oopsie_daisy_service std_srvs/srv/Trigger "{}"
+ros2 service call /robot_head/emergency_stop_service std_srvs/srv/Trigger "{}"
+
+
+# =================================================================
+# 6. TELEMETRY & STATUS (Monitor Daisy)
+# =================================================================
+
+# Check if the bridge is successfully connected to the Pi Python Host
+ros2 topic echo /robot_head/bridge_connected
+
+# Check if the Python host is successfully talking to the RP2350 Microcontroller
+ros2 topic echo /robot_head/serial_connected
+
+# Get current control mode (ROS, AUTO, or MANUAL)
+ros2 topic echo /robot_head/current_mode
+
+# Get full JSON status block
+ros2 topic echo /robot_head/status
