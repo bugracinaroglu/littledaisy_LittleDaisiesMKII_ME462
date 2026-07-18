@@ -9,6 +9,13 @@ from behavior.behavior_manager import BehaviorManager
 from camera import Camera
 from config import *
 
+# --- PC MODE OVERRIDES ---
+CAMERA_BACKEND = "opencv"
+CAMERA_PROFILE = "usb_webcam"
+FISHEYE_CORRECTION_MODE = "none"
+ENABLE_SERIAL = False
+HEADLESS_MODE = False
+# -------------------------
 
 from control.command_sender import CommandSender
 from control.control_mode import ControlMode, ControlModeManager
@@ -20,6 +27,316 @@ from vision.gesture_detector import GestureDetector
 from vision.human_tracker import HumanTracker
 from vision.target_selector import TargetSelector
 from visualizer import Visualizer
+
+
+import mediapipe as mp
+
+
+def create_caricature_mediapipe(img):
+    """Generate a clean 1-bit caricature sketch using MediaPipe Face Mesh."""
+    mp_face_mesh = mp.solutions.face_mesh
+    
+    # Initialize canvases
+    h, w = img.shape[:2]
+    img_basic = np.zeros_like(img) # Blank black canvas for 1-bit caricature
+    img_tess = img.copy()
+    img_cont = img.copy()
+    
+    with mp_face_mesh.FaceMesh(
+        static_image_mode=True,
+        max_num_faces=1,
+        refine_landmarks=True,
+        min_detection_confidence=0.5
+    ) as face_mesh:
+        results = face_mesh.process(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+        
+        if not results.multi_face_landmarks:
+            empty_metrics = {
+                'm_var': 0, 'fh_var': 0, 'sp_var': 0, 'gt_var': 0, 'lj_var': 0, 'rj_var': 0, 'gl_var': 0,
+                'm_mean': 0, 'fh_mean': 0, 'sp_mean': 0, 'gt_mean': 0, 'lj_mean': 0, 'rj_mean': 0, 'gl_mean': 0,
+                'm_avg': (0,0,0), 'fh_avg': (0,0,0), 'sp_avg': (0,0,0), 'gt_avg': (0,0,0), 'lj_avg': (0,0,0), 'rj_avg': (0,0,0), 'gl_avg': (0,0,0),
+                'm_dist': 0, 'sp_dist': 0, 'gt_dist': 0, 'lj_dist': 0, 'rj_dist': 0, 'gl_dist': 0
+            }
+            return img_basic, img_tess, img_cont, img.copy(), img.copy(), False, False, False, False, False, False, empty_metrics
+            
+        face_landmarks = results.multi_face_landmarks[0]
+        
+        # Function to draw a specific set of connections
+        def draw_feature(canvas, connections, color=(0, 255, 0), thickness=2):
+            if not connections:
+                return
+            for connection in connections:
+                start_idx = connection[0]
+                end_idx = connection[1]
+                pt1 = face_landmarks.landmark[start_idx]
+                pt2 = face_landmarks.landmark[end_idx]
+                x1, y1 = int(pt1.x * w), int(pt1.y * h)
+                x2, y2 = int(pt2.x * w), int(pt2.y * h)
+                cv2.line(canvas, (x1, y1), (x2, y2), color, thickness)
+
+        # 1. Basic + Iris (Drawn in White for 1-bit Caricature)
+        draw_feature(img_basic, mp_face_mesh.FACEMESH_FACE_OVAL, color=(255, 255, 255), thickness=2)
+        draw_feature(img_basic, mp_face_mesh.FACEMESH_LEFT_EYE, color=(255, 255, 255), thickness=2)
+        draw_feature(img_basic, mp_face_mesh.FACEMESH_RIGHT_EYE, color=(255, 255, 255), thickness=2)
+        draw_feature(img_basic, mp_face_mesh.FACEMESH_LIPS, color=(255, 255, 255), thickness=2)
+        draw_feature(img_basic, mp_face_mesh.FACEMESH_LEFT_EYEBROW, color=(255, 255, 255), thickness=2)
+        draw_feature(img_basic, mp_face_mesh.FACEMESH_RIGHT_EYEBROW, color=(255, 255, 255), thickness=2)
+        if hasattr(mp_face_mesh, 'FACEMESH_LEFT_IRIS'):
+            left_iris_pts = [face_landmarks.landmark[idx] for pair in mp_face_mesh.FACEMESH_LEFT_IRIS for idx in pair]
+            if left_iris_pts:
+                cx = int(np.mean([pt.x * w for pt in left_iris_pts]))
+                cy = int(np.mean([pt.y * h for pt in left_iris_pts]))
+                cv2.circle(img_basic, (cx, cy), 3, (255, 255, 255), -1)
+                
+            right_iris_pts = [face_landmarks.landmark[idx] for pair in mp_face_mesh.FACEMESH_RIGHT_IRIS for idx in pair]
+            if right_iris_pts:
+                cx = int(np.mean([pt.x * w for pt in right_iris_pts]))
+                cy = int(np.mean([pt.y * h for pt in right_iris_pts]))
+                cv2.circle(img_basic, (cx, cy), 3, (255, 255, 255), -1)
+        if hasattr(mp_face_mesh, 'FACEMESH_NOSE'):
+            draw_feature(img_basic, mp_face_mesh.FACEMESH_NOSE, color=(255, 255, 255), thickness=2)
+            
+        # 2. Tesselation
+        draw_feature(img_tess, mp_face_mesh.FACEMESH_TESSELATION, color=(255, 255, 0), thickness=1)
+        
+        # --- MUSTACHE DETECTION (POLYGON MESH METHOD WITH BASELINE) ---
+        mustache_detected = False
+        soul_patch_detected = False
+        goatee_detected = False
+        left_jaw_detected = False
+        right_jaw_detected = False
+        glasses_detected = False
+        metrics = {'m_var': 0.0, 'fh_var': 0.0, 'sp_var': 0.0, 'gt_var': 0.0, 'lj_var': 0.0, 'rj_var': 0.0, 'gl_var': 0.0,
+                   'm_mean': 0.0, 'fh_mean': 0.0, 'sp_mean': 0.0, 'gt_mean': 0.0, 'lj_mean': 0.0, 'rj_mean': 0.0, 'gl_mean': 0.0}
+        img_mustache = img.copy()
+        
+        try:
+            # 1. Draw the full Tesselation on the new mustache window (faint yellow)
+            draw_feature(img_mustache, mp_face_mesh.FACEMESH_TESSELATION, color=(150, 150, 0), thickness=1)
+            
+            # 2. Define the Mustache Polygon (User-provided indices)
+            mustache_indices = [0, 37, 39, 40, 43, 202, 212, 216, 206, 203, 99, 97, 2, 326, 327, 423, 426, 436, 432, 422, 273, 267, 269, 270]
+            poly_points = []
+            for idx in mustache_indices:
+                lm = face_landmarks.landmark[idx]
+                poly_points.append([int(lm.x * w), int(lm.y * h)])
+            poly_points = np.array(poly_points, np.int32).reshape((-1, 1, 2))
+            
+            # 3. Define the Forehead Baseline Polygon (User-provided indices)
+            forehead_indices = [54, 104, 69, 108, 151, 337, 299, 333, 298, 251, 284, 332, 297, 338, 10, 109, 67, 103]
+            fh_points = []
+            for idx in forehead_indices:
+                lm = face_landmarks.landmark[idx]
+                fh_points.append([int(lm.x * w), int(lm.y * h)])
+            fh_points = np.array(fh_points, np.int32).reshape((-1, 1, 2))
+            
+            # 4. Define the Soul Patch Polygon (User-provided indices)
+            soul_patch_indices = [182, 201, 200, 421, 418, 406, 405, 314, 17, 84, 181, 91]
+            sp_points = []
+            for idx in soul_patch_indices:
+                lm = face_landmarks.landmark[idx]
+                sp_points.append([int(lm.x * w), int(lm.y * h)])
+            sp_points = np.array(sp_points, np.int32).reshape((-1, 1, 2))
+            
+            # 5. Define the Goatee Polygon (User-provided indices)
+            goatee_indices = [149, 176, 148, 152, 377, 400, 378, 395, 431, 262, 428, 199, 208, 32, 211, 170]
+            gt_points = []
+            for idx in goatee_indices:
+                lm = face_landmarks.landmark[idx]
+                gt_points.append([int(lm.x * w), int(lm.y * h)])
+            gt_points = np.array(gt_points, np.int32).reshape((-1, 1, 2))
+            
+            # 6. Define the Left Jaw Polygon
+            left_jaw_indices = [379, 394, 430, 434, 416, 411, 352, 401, 361, 288, 397, 365]
+            lj_points = []
+            for idx in left_jaw_indices:
+                lm = face_landmarks.landmark[idx]
+                lj_points.append([int(lm.x * w), int(lm.y * h)])
+            lj_points = np.array(lj_points, np.int32).reshape((-1, 1, 2))
+            
+            # 7. Define the Right Jaw Polygon
+            right_jaw_indices = [150, 170, 211, 210, 214, 187, 123, 177, 215, 58, 172, 136]
+            rj_points = []
+            for idx in right_jaw_indices:
+                lm = face_landmarks.landmark[idx]
+                rj_points.append([int(lm.x * w), int(lm.y * h)])
+            rj_points = np.array(rj_points, np.int32).reshape((-1, 1, 2))
+            
+            # 8. Define the Glasses Polygon (Bridge of the nose)
+            glasses_indices = [133, 168, 362, 343, 197, 114]
+            gl_points = []
+            for idx in glasses_indices:
+                lm = face_landmarks.landmark[idx]
+                gl_points.append([int(lm.x * w), int(lm.y * h)])
+            gl_points = np.array(gl_points, np.int32).reshape((-1, 1, 2))
+            
+            # Draw polygons on the mesh window
+            cv2.polylines(img_mustache, [poly_points], isClosed=True, color=(0, 0, 255), thickness=2)    # Mustache = RED
+            cv2.polylines(img_mustache, [fh_points], isClosed=True, color=(0, 255, 0), thickness=2)      # Forehead = GREEN
+            cv2.polylines(img_mustache, [sp_points], isClosed=True, color=(255, 255, 0), thickness=2)    # Soul Patch = CYAN
+            cv2.polylines(img_mustache, [gt_points], isClosed=True, color=(255, 0, 255), thickness=2)    # Goatee = MAGENTA
+            cv2.polylines(img_mustache, [lj_points], isClosed=True, color=(0, 128, 255), thickness=2)    # Left Jaw = ORANGE
+            cv2.polylines(img_mustache, [rj_points], isClosed=True, color=(200, 0, 200), thickness=2)    # Right Jaw = PURPLE
+            cv2.polylines(img_mustache, [gl_points], isClosed=True, color=(255, 255, 255), thickness=2)  # Glasses = WHITE
+            
+            # Create Binary Masks
+            mask_m = np.zeros((h, w), dtype=np.uint8)
+            cv2.fillPoly(mask_m, [poly_points], 255)
+            
+            mask_fh = np.zeros((h, w), dtype=np.uint8)
+            cv2.fillPoly(mask_fh, [fh_points], 255)
+            
+            mask_sp = np.zeros((h, w), dtype=np.uint8)
+            cv2.fillPoly(mask_sp, [sp_points], 255)
+            
+            mask_gt = np.zeros((h, w), dtype=np.uint8)
+            cv2.fillPoly(mask_gt, [gt_points], 255)
+            
+            mask_lj = np.zeros((h, w), dtype=np.uint8)
+            cv2.fillPoly(mask_lj, [lj_points], 255)
+            
+            mask_rj = np.zeros((h, w), dtype=np.uint8)
+            cv2.fillPoly(mask_rj, [rj_points], 255)
+            
+            mask_gl = np.zeros((h, w), dtype=np.uint8)
+            cv2.fillPoly(mask_gl, [gl_points], 255)
+            
+            # Math processing
+            gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            laplacian = cv2.Laplacian(gray_img, cv2.CV_64F)
+            
+            # Extract Pixels
+            m_pixels_gray = gray_img[mask_m == 255]
+            m_pixels_lap = laplacian[mask_m == 255]
+            
+            fh_pixels_gray = gray_img[mask_fh == 255]
+            fh_pixels_lap = laplacian[mask_fh == 255]
+            
+            sp_pixels_gray = gray_img[mask_sp == 255]
+            sp_pixels_lap = laplacian[mask_sp == 255]
+            
+            gt_pixels_gray = gray_img[mask_gt == 255]
+            gt_pixels_lap = laplacian[mask_gt == 255]
+            
+            lj_pixels_gray = gray_img[mask_lj == 255]
+            lj_pixels_lap = laplacian[mask_lj == 255]
+            
+            rj_pixels_gray = gray_img[mask_rj == 255]
+            rj_pixels_lap = laplacian[mask_rj == 255]
+            
+            gl_pixels_gray = gray_img[mask_gl == 255]
+            gl_pixels_lap = laplacian[mask_gl == 255]
+            
+            if len(m_pixels_gray) > 0 and len(fh_pixels_gray) > 0 and len(sp_pixels_gray) > 0 and len(gt_pixels_gray) > 0 and len(lj_pixels_gray) > 0 and len(rj_pixels_gray) > 0 and len(gl_pixels_gray) > 0:
+                m_var = np.var(m_pixels_lap)
+                fh_var = np.var(fh_pixels_lap)
+                sp_var = np.var(sp_pixels_lap)
+                gt_var = np.var(gt_pixels_lap)
+                lj_var = np.var(lj_pixels_lap)
+                rj_var = np.var(rj_pixels_lap)
+                gl_var = np.var(gl_pixels_lap)
+                
+                m_mean = np.mean(m_pixels_gray)
+                fh_mean = np.mean(fh_pixels_gray)
+                sp_mean = np.mean(sp_pixels_gray)
+                gt_mean = np.mean(gt_pixels_gray)
+                lj_mean = np.mean(lj_pixels_gray)
+                rj_mean = np.mean(rj_pixels_gray)
+                gl_mean = np.mean(gl_pixels_gray)
+                
+                def get_mid_color(image, pts):
+                    if len(pts) == 0: return (0,0,0)
+                    cx = int(np.mean([p[0][0] for p in pts]))
+                    cy = int(np.mean([p[0][1] for p in pts]))
+                    cy = max(0, min(cy, image.shape[0]-1))
+                    cx = max(0, min(cx, image.shape[1]-1))
+                    return tuple(map(int, image[cy, cx]))
+                    
+                m_avg = tuple(map(int, cv2.mean(img, mask=mask_m)[:3]))
+                fh_avg = tuple(map(int, cv2.mean(img, mask=mask_fh)[:3]))
+                sp_avg = tuple(map(int, cv2.mean(img, mask=mask_sp)[:3]))
+                gt_avg = tuple(map(int, cv2.mean(img, mask=mask_gt)[:3]))
+                lj_avg = tuple(map(int, cv2.mean(img, mask=mask_lj)[:3]))
+                rj_avg = tuple(map(int, cv2.mean(img, mask=mask_rj)[:3]))
+                gl_avg = tuple(map(int, cv2.mean(img, mask=mask_gl)[:3]))
+                
+                m_mid = get_mid_color(img, poly_points)
+                fh_mid = get_mid_color(img, fh_points)
+                sp_mid = get_mid_color(img, sp_points)
+                gt_mid = get_mid_color(img, gt_points)
+                lj_mid = get_mid_color(img, lj_points)
+                rj_mid = get_mid_color(img, rj_points)
+                gl_mid = get_mid_color(img, gl_points)
+                
+                metrics = {
+                    'm_var': m_var, 'fh_var': fh_var, 'sp_var': sp_var, 'gt_var': gt_var, 'lj_var': lj_var, 'rj_var': rj_var, 'gl_var': gl_var,
+                    'm_mean': m_mean, 'fh_mean': fh_mean, 'sp_mean': sp_mean, 'gt_mean': gt_mean, 'lj_mean': lj_mean, 'rj_mean': rj_mean, 'gl_mean': gl_mean,
+                    'm_avg': m_avg, 'fh_avg': fh_avg, 'sp_avg': sp_avg, 'gt_avg': gt_avg, 'lj_avg': lj_avg, 'rj_avg': rj_avg, 'gl_avg': gl_avg,
+                    'm_mid': m_mid, 'fh_mid': fh_mid, 'sp_mid': sp_mid, 'gt_mid': gt_mid, 'lj_mid': lj_mid, 'rj_mid': rj_mid, 'gl_mid': gl_mid
+                }
+                
+                # DETECTION LOGIC (Euclidean Color Distance relative to Forehead)
+                def color_distance(c1, c2):
+                    return np.sqrt((c1[0]-c2[0])**2 + (c1[1]-c2[1])**2 + (c1[2]-c2[2])**2)
+                
+                dist_m = color_distance(m_avg, fh_avg)
+                dist_sp = color_distance(sp_avg, fh_avg)
+                dist_gt = color_distance(gt_avg, fh_avg)
+                dist_lj = color_distance(lj_avg, fh_avg)
+                dist_rj = color_distance(rj_avg, fh_avg)
+                dist_gl = color_distance(gl_avg, fh_avg)
+                
+                metrics.update({
+                    'm_dist': dist_m, 'sp_dist': dist_sp, 'gt_dist': dist_gt,
+                    'lj_dist': dist_lj, 'rj_dist': dist_rj, 'gl_dist': dist_gl
+                })
+                
+                COLOR_THRESH = 65.0
+                mustache_detected = dist_m > COLOR_THRESH
+                soul_patch_detected = dist_sp > COLOR_THRESH
+                goatee_detected = dist_gt > COLOR_THRESH
+                left_jaw_detected = dist_lj > COLOR_THRESH
+                right_jaw_detected = dist_rj > COLOR_THRESH
+                glasses_detected = dist_gl > COLOR_THRESH
+                
+            # --- DEBUG: Draw Landmark IDs on Tesselation Window ---
+            img_tess = cv2.resize(img_tess, (w * 3, h * 3))
+            for idx, lm in enumerate(face_landmarks.landmark):
+                tx, ty = int(lm.x * w * 3), int(lm.y * h * 3)
+                cv2.putText(img_tess, str(idx), (tx, ty), cv2.FONT_HERSHEY_PLAIN, 0.8, (255, 255, 255), 1)
+                cv2.circle(img_tess, (tx, ty), 2, (0, 0, 255), -1)
+            # ------------------------------------------------------
+                
+            # ----------------------------------------------------
+            # WARP THE FINAL IMAGES TO A PERFECT CIRCLE
+            # ----------------------------------------------------
+            img_warped_oval = np.zeros_like(img)
+            try:
+                from vision.face_warper import warp_face_to_circle
+                img_basic = warp_face_to_circle(img_basic, face_landmarks)
+                img_mustache = warp_face_to_circle(img_mustache, face_landmarks)
+                
+                # Get the fully warped color face
+                warped_color = warp_face_to_circle(img, face_landmarks)
+                
+                # Mask out the background so we ONLY see the face inside the circle
+                mask = np.zeros_like(img, dtype=np.uint8)
+                center = (int(w/2), int(h/2))
+                radius = int(min(w, h) / 2.0 - 5)
+                cv2.circle(mask, center, radius, (255, 255, 255), -1)
+                
+                img_warped_oval = cv2.bitwise_and(warped_color, mask)
+                # Draw the white border ring
+                cv2.circle(img_warped_oval, center, radius, (255, 255, 255), 2)
+                
+            except Exception as warp_e:
+                print("Warping failed:", warp_e)
+                
+        except Exception as e:
+            print("Mustache poly error:", e)
+        # ------------------------------------------------
+            
+    return img_basic, img_tess, img_cont, img_mustache, img_warped_oval, mustache_detected, soul_patch_detected, goatee_detected, left_jaw_detected, right_jaw_detected, glasses_detected, metrics
 
 
 def estimate_pan_servo_angle(head_pan_angle):
@@ -279,6 +596,17 @@ def main():
     face_window_open = False
     captured_face_image = None
     captured_edges_image = None
+    captured_tess_image = None
+    captured_cont_image = None
+    captured_mustache_image = None
+    captured_warped_oval = None
+    captured_mustache_status = False
+    captured_sp_status = False
+    captured_gt_status = False
+    captured_lj_status = False
+    captured_rj_status = False
+    captured_gl_status = False
+    captured_mustache_metrics = {}
     last_thumb_up = False
     last_thumb_down = False
 
@@ -355,15 +683,26 @@ def main():
                                 cv2.circle(mask, (cx - x1, cy - y1), radius, (255, 255, 255), -1)
                                 
                                 captured_face_image = cv2.bitwise_and(crop, mask)
-                                captured_edges_image = cv2.Canny(captured_face_image, 100, 200)
+                                img_basic, img_tess, img_cont, img_mustache, img_warped_oval, has_mustache, has_sp, has_gt, has_lj, has_rj, has_gl, metrics = create_caricature_mediapipe(captured_face_image)
+                                captured_edges_image = img_basic
+                                captured_tess_image = img_tess
+                                captured_cont_image = img_cont
+                                captured_mustache_image = img_mustache
+                                captured_warped_oval = img_warped_oval
+                                captured_mustache_status = has_mustache
+                                captured_sp_status = has_sp
+                                captured_gt_status = has_gt
+                                captured_lj_status = has_lj
+                                captured_rj_status = has_rj
+                                captured_gl_status = has_gl
+                                captured_mustache_metrics = metrics
                                 face_window_open = True
-                                print("[SYSTEM] Circular face screenshot and edges captured!")
+                                print(f"[SYSTEM] Circular face captured! Beard: {has_mustache} | Glasses: {has_gl}")
                                 
                                 edge_resized = cv2.resize(captured_edges_image, (240, 240))
-                                binary = (edge_resized > 127).astype(np.uint8)
-                                packed = np.packbits(binary)
-                                b64 = base64.b64encode(packed).decode('utf-8')
-                                command_sender.send_image(b64)
+                                rgb565 = cv2.cvtColor(edge_resized, cv2.COLOR_BGR2BGR565)
+                                swapped_bytes = rgb565.view(np.uint16).byteswap().tobytes()
+                                command_sender.send_image_chunked(swapped_bytes, image_type="RGB565")
                         else:
                             # Fallback to rectangular if landmarks are missing
                             face_box = None
@@ -383,15 +722,26 @@ def main():
                                 x2, y2 = min(w_f, int(x2)), min(h_f, int(y2))
                                 if x2 > x1 and y2 > y1:
                                     captured_face_image = frame[y1:y2, x1:x2].copy()
-                                    captured_edges_image = cv2.Canny(captured_face_image, 100, 200)
+                                    img_basic, img_tess, img_cont, img_mustache, img_warped_oval, has_mustache, has_sp, has_gt, has_lj, has_rj, has_gl, metrics = create_caricature_mediapipe(captured_face_image)
+                                    captured_edges_image = img_basic
+                                    captured_tess_image = img_tess
+                                    captured_cont_image = img_cont
+                                    captured_mustache_image = img_mustache
+                                    captured_warped_oval = img_warped_oval
+                                    captured_mustache_status = has_mustache
+                                    captured_sp_status = has_sp
+                                    captured_gt_status = has_gt
+                                    captured_lj_status = has_lj
+                                    captured_rj_status = has_rj
+                                    captured_gl_status = has_gl
+                                    captured_mustache_metrics = metrics
                                     face_window_open = True
-                                    print("[SYSTEM] Face screenshot and edges captured!")
+                                    print(f"[SYSTEM] Face captured! Beard: {has_mustache} | Glasses: {has_gl}")
                                     
                                     edge_resized = cv2.resize(captured_edges_image, (240, 240))
-                                    binary = (edge_resized > 127).astype(np.uint8)
-                                    packed = np.packbits(binary)
-                                    b64 = base64.b64encode(packed).decode('utf-8')
-                                    command_sender.send_image(b64)
+                                    rgb565 = cv2.cvtColor(edge_resized, cv2.COLOR_BGR2BGR565)
+                                    swapped_bytes = rgb565.view(np.uint16).byteswap().tobytes()
+                                    command_sender.send_image_chunked(swapped_bytes, image_type="RGB565")
                     
                     # Close window when thumb goes down
                     if current_thumb_down and not last_thumb_down:
@@ -399,13 +749,23 @@ def main():
                             face_window_open = False
                             captured_face_image = None
                             captured_edges_image = None
+                            captured_tess_image = None
+                            captured_cont_image = None
+                            captured_mustache_image = None
                             try:
                                 if not HEADLESS_MODE:
                                     cv2.destroyWindow("Captured Face")
-                                    cv2.destroyWindow("Face Edges")
+                                    cv2.destroyWindow("MediaPipe: Basic + Iris")
+                                    cv2.destroyWindow("MediaPipe: Tesselation")
+                                    cv2.destroyWindow("MediaPipe: Contours")
+                                    cv2.destroyWindow("MediaPipe: Mustache Mesh")
+                                    cv2.destroyWindow("Facial Features")
                             except Exception:
                                 pass
                             print("[SYSTEM] Face window closed.")
+                            if command_sender:
+                                command_sender.send_mode(mode_manager.get_mode())
+                                print("[SYSTEM] Cleared robot screen.")
                             
                     last_thumb_up = current_thumb_up
                     last_thumb_down = current_thumb_down
@@ -546,9 +906,89 @@ def main():
             if not HEADLESS_MODE:
                 cv2.imshow(WINDOW_NAME, output)
                 if face_window_open and captured_face_image is not None:
-                    cv2.imshow("Captured Face", captured_face_image)
+                    # cv2.imshow("Captured Face", captured_face_image) # Omit to save screen space
                     if captured_edges_image is not None:
-                        cv2.imshow("Face Edges", captured_edges_image)
+                        cv2.imshow("MediaPipe: Basic + Iris", captured_edges_image)
+                    if captured_tess_image is not None:
+                        cv2.imshow("MediaPipe: Tesselation", captured_tess_image)
+                    if captured_cont_image is not None:
+                        cv2.imshow("MediaPipe: Contours", captured_cont_image)
+                    if captured_mustache_image is not None:
+                        cv2.imshow("MediaPipe: Mustache Mesh", captured_mustache_image)
+                        
+                    if captured_warped_oval is not None:
+                        cv2.imshow("Warped Face Border", captured_warped_oval)
+                        
+                    # Create Text Window for Facial Features
+                    feature_img = np.zeros((650, 800, 3), dtype=np.uint8)
+                    
+                    # Logic gates for Facial Hair Style
+                    has_lj = captured_lj_status
+                    has_rj = captured_rj_status
+                    has_gt = captured_gt_status
+                    has_m = captured_mustache_status
+                    has_gl = captured_gl_status
+                    
+                    style = "Clean Shaven"
+                    if has_lj and has_rj and has_gt:
+                        style = "Full Beard"
+                    elif has_lj and has_rj and not has_gt:
+                        style = "Mutton Chops"
+                    elif has_gt and not has_lj and not has_rj:
+                        style = "Goatee"
+                    elif has_m and not has_gt and not has_lj and not has_rj:
+                        style = "Mustache Only"
+                    elif has_lj or has_rj or has_gt:
+                        style = "Patchy / Abstract Beard"
+                        
+                    cv2.putText(feature_img, f"STYLE DETECTED: {style}", (20, 50), cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 255), 3)
+                    
+                    # Glasses Alert
+                    glasses_str = "GLASSES DETECTED!" if has_gl else "NO GLASSES"
+                    gl_color = (0, 255, 255) if has_gl else (100, 100, 100)
+                    cv2.putText(feature_img, glasses_str, (20, 100), cv2.FONT_HERSHEY_SIMPLEX, 1.0, gl_color, 2)
+                    
+                    cv2.line(feature_img, (0, 120), (800, 120), (255, 255, 255), 2)
+                    
+                    # Color Analytics Column
+                    cv2.putText(feature_img, "Region", (20, 150), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                    cv2.putText(feature_img, "Average Color (BGR)", (220, 150), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                    cv2.putText(feature_img, "Middle Pixel (BGR)", (520, 150), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                    
+                    regions = [
+                        ("Mustache", 'm'),
+                        ("Soul Patch", 'sp'),
+                        ("Goatee", 'gt'),
+                        ("Left Jaw", 'lj'),
+                        ("Right Jaw", 'rj'),
+                        ("Glasses", 'gl'),
+                        ("Forehead", 'fh')
+                    ]
+                    
+                    y_off = 190
+                    for name, prefix in regions:
+                        avg_c = metrics.get(f'{prefix}_avg', (0,0,0))
+                        mid_c = metrics.get(f'{prefix}_mid', (0,0,0))
+                        
+                        cv2.putText(feature_img, name, (20, y_off), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 1)
+                        # We print the color values, and tint the text with that exact color for immediate visual feedback!
+                        cv2.putText(feature_img, str(avg_c), (220, y_off), cv2.FONT_HERSHEY_SIMPLEX, 0.7, avg_c, 2)
+                        cv2.putText(feature_img, str(mid_c), (520, y_off), cv2.FONT_HERSHEY_SIMPLEX, 0.7, mid_c, 2)
+                        y_off += 35
+                        
+                    # Move Texture and Darkness Columns further down
+                    y_t = 460
+                    # Distance Metric Column
+                    cv2.putText(feature_img, f"Euclidean Color Distance (Threshold > 65):", (20, y_t), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                    cv2.putText(feature_img, f"  Mustache: {metrics.get('m_dist', 0):.1f}", (20, y_t+30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0) if captured_mustache_status else (0, 0, 255), 2)
+                    cv2.putText(feature_img, f"  Soul Patch: {metrics.get('sp_dist', 0):.1f}", (20, y_t+55), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0) if captured_sp_status else (0, 0, 255), 2)
+                    cv2.putText(feature_img, f"  Goatee: {metrics.get('gt_dist', 0):.1f}", (20, y_t+80), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0) if captured_gt_status else (0, 0, 255), 2)
+                    cv2.putText(feature_img, f"  Left Jaw: {metrics.get('lj_dist', 0):.1f}", (20, y_t+105), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0) if captured_lj_status else (0, 0, 255), 2)
+                    cv2.putText(feature_img, f"  Right Jaw: {metrics.get('rj_dist', 0):.1f}", (20, y_t+130), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0) if captured_rj_status else (0, 0, 255), 2)
+                    cv2.putText(feature_img, f"  Glasses: {metrics.get('gl_dist', 0):.1f}", (20, y_t+155), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0) if captured_gl_status else (0, 0, 255), 2)
+                    
+                    cv2.imshow("Facial Features", feature_img)
+                    
                 key = cv2.waitKey(1) & 0xFF
             else:
                 key = 255

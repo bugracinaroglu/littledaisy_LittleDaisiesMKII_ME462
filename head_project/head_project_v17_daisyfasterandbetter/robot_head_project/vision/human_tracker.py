@@ -332,11 +332,11 @@ class HumanTracker:
         )
         if face_bbox is not None:
             # MediaPipe Pose only maps eyes, nose, and ears.
-            # To capture the forehead and chin, we extend the box vertically based on its width.
+            # To capture the full forehead and long beards, we extend the box vertically based on its width.
             fx1, fy1, fx2, fy2 = face_bbox
             face_w = fx2 - fx1
-            fy1 = max(0, int(fy1 - face_w * 0.35))
-            fy2 = min(frame_height - 1, int(fy2 + face_w * 0.55))
+            fy1 = max(0, int(fy1 - face_w * 0.55))  # Increased from 0.35 to capture full forehead
+            fy2 = min(frame_height - 1, int(fy2 + face_w * 0.75))  # Increased from 0.55 to capture full beard
             face_bbox = (fx1, fy1, fx2, fy2)
 
         upper_body_center = self._upper_body_center(points)
