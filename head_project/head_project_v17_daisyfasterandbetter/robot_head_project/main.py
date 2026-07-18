@@ -434,7 +434,7 @@ def main():
 
             active_mode = mode_manager.get_mode()
             if not system_started:
-                robot_head.show_face("STANDBY")
+                robot_head.show_face("STANDBY", source=active_mode)
                 behavior_commands = {}
             else:
                 behavior_commands = behavior_manager.update(
