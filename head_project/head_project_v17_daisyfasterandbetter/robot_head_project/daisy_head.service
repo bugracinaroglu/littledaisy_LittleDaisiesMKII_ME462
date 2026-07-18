@@ -6,7 +6,7 @@ After=network.target multi-user.target
 Type=simple
 User=littledaisy
 WorkingDirectory=/home/littledaisy/littledaisy_LittleDaisiesMKII_ME462/head_project/head_project_v17_daisyfasterandbetter/robot_head_project
-ExecStart=/home/littledaisy/python_envs/daisy_fast/bin/python3 /home/littledaisy/littledaisy_LittleDaisiesMKII_ME462/head_project/head_project_v17_daisyfasterandbetter/robot_head_project/main.py
+ExecStart=/home/littledaisy/python_envs/daisy_fast/bin/activate /home/littledaisy/littledaisy_LittleDaisiesMKII_ME462/head_project/head_project_v17_daisyfasterandbetter/robot_head_project/main.py
 Restart=always
 RestartSec=5
 Environment="PYTHONUNBUFFERED=1"
