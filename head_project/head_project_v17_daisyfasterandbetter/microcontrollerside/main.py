@@ -25,7 +25,8 @@ def init_lcd_and_face():
     lcd.set_bl_pwm(65535)
 
     face = FaceRenderer(lcd)
-    face.set_face(DEFAULT_FACE, transition=False)
+    face.set_face("SLEEPING", transition=False)
+    face.show_text("peace to start", hold_ms=0)
     return lcd, face
 
 
@@ -409,7 +410,7 @@ def run():
     touch_cooldown_ms = 350
 
     face_state = {
-        "base_face": DEFAULT_FACE,
+        "base_face": "SLEEPING",
         "special_face": None,
         "lock_started_ms": ticks_ms(),
         "lock_duration_ms": 0,
