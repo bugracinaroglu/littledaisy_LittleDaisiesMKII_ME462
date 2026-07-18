@@ -332,26 +332,31 @@ def handle_command(
         import framebuf
         try:
             raw_bytes = binascii.a2b_base64(value)
-            fbuf = framebuf.FrameBuffer(bytearray(raw_bytes), 240, 240, framebuf.MONO_HLSB)
             
-            # The face renderer usually owns the lcd buffer. We can access lcd globally or pass it.
-            # We don't have direct access to lcd in handle_command, but `face` has `face.lcd`.
             if face is not None and hasattr(face, "lcd"):
                 lcd_local = face.lcd
                 lcd_local.fill(lcd_local.black)
                 
-                # Create a 2-color palette mapping 0 to Black and 1 to White
-                # White in RGB565 is 0xFFFF (2 bytes: 0xFF, 0xFF)
-                # Black is 0x0000 (2 bytes: 0x00, 0x00)
-                palette_data = bytearray([0x00, 0x00, 0xFF, 0xFF])
-                palette = framebuf.FrameBuffer(palette_data, 2, 1, framebuf.RGB565)
+                if len(raw_bytes) == 7200:
+                    # 1-bit Monochrome Image
+                    fbuf = framebuf.FrameBuffer(bytearray(raw_bytes), 240, 240, framebuf.MONO_HLSB)
+                    palette_data = bytearray([0x00, 0x00, 0xFF, 0xFF])
+                    palette = framebuf.FrameBuffer(palette_data, 2, 1, framebuf.RGB565)
+                    lcd_local.blit(fbuf, 0, 0, -1, palette)
+                    print("1-bit Monochrome Image rendered")
+                    
+                elif len(raw_bytes) == 115200:
+                    # 16-bit RGB565 Full Color Image
+                    fbuf = framebuf.FrameBuffer(bytearray(raw_bytes), 240, 240, framebuf.RGB565)
+                    lcd_local.blit(fbuf, 0, 0)
+                    print("16-bit Color Image rendered")
                 
-                # Blit the 1-bit framebuf using the palette
-                lcd_local.blit(fbuf, 0, 0, -1, palette)
+                else:
+                    print("Unknown image format size:", len(raw_bytes))
+                    
                 lcd_local.show()
                 set_face_lock(face_state, 6000)
                 face_state["image_lock_ms"] = ticks_ms() + 6000
-                print("Image rendered")
         except Exception as e:
             print("Image decode error:", e)
 

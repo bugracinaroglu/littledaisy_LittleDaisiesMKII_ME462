@@ -9,13 +9,6 @@ from behavior.behavior_manager import BehaviorManager
 from camera import Camera
 from config import *
 
-# --- PC MODE OVERRIDES ---
-CAMERA_BACKEND = "opencv"
-CAMERA_PROFILE = "usb_webcam"
-FISHEYE_CORRECTION_MODE = "none"
-ENABLE_SERIAL = False
-HEADLESS_MODE = False
-# -------------------------
 
 from control.command_sender import CommandSender
 from control.control_mode import ControlMode, ControlModeManager
@@ -27,35 +20,6 @@ from vision.gesture_detector import GestureDetector
 from vision.human_tracker import HumanTracker
 from vision.target_selector import TargetSelector
 from visualizer import Visualizer
-
-
-def create_caricature_opencv(img):
-    """Generate a clean 1-bit caricature sketch using OpenCV filters."""
-    # Convert to grayscale
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    
-    # Increase contrast to make facial features pop against the skin
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-    gray = clahe.apply(gray)
-    
-    # Apply bilateral filter to smooth skin but preserve edges
-    smooth = cv2.bilateralFilter(gray, d=9, sigmaColor=75, sigmaSpace=75)
-    
-    # Adaptive thresholding to get sharp black lines on a white background
-    edges = cv2.adaptiveThreshold(
-        smooth,
-        255,
-        cv2.ADAPTIVE_THRESH_MEAN_C,
-        cv2.THRESH_BINARY_INV,
-        blockSize=11,
-        C=5
-    )
-    
-    # Morphological opening to remove 1-pixel noise dots
-    kernel = np.ones((2, 2), np.uint8)
-    edges = cv2.morphologyEx(edges, cv2.MORPH_OPEN, kernel)
-    
-    return edges
 
 
 def estimate_pan_servo_angle(head_pan_angle):
@@ -391,14 +355,13 @@ def main():
                                 cv2.circle(mask, (cx - x1, cy - y1), radius, (255, 255, 255), -1)
                                 
                                 captured_face_image = cv2.bitwise_and(crop, mask)
-                                captured_edges_image = create_caricature_opencv(captured_face_image)
+                                captured_edges_image = captured_face_image.copy() # Just to keep variable name valid for imshow
                                 face_window_open = True
-                                print("[SYSTEM] Circular face screenshot and edges captured!")
+                                print("[SYSTEM] Circular face screenshot and colors captured!")
                                 
-                                edge_resized = cv2.resize(captured_edges_image, (240, 240))
-                                binary = (edge_resized > 127).astype(np.uint8)
-                                packed = np.packbits(binary)
-                                b64 = base64.b64encode(packed).decode('utf-8')
+                                color_resized = cv2.resize(captured_face_image, (240, 240))
+                                rgb565 = cv2.cvtColor(color_resized, cv2.COLOR_BGR2BGR565)
+                                b64 = base64.b64encode(rgb565.tobytes()).decode('utf-8')
                                 command_sender.send_image(b64)
                         else:
                             # Fallback to rectangular if landmarks are missing
@@ -419,14 +382,13 @@ def main():
                                 x2, y2 = min(w_f, int(x2)), min(h_f, int(y2))
                                 if x2 > x1 and y2 > y1:
                                     captured_face_image = frame[y1:y2, x1:x2].copy()
-                                    captured_edges_image = create_caricature_opencv(captured_face_image)
+                                    captured_edges_image = captured_face_image.copy()
                                     face_window_open = True
-                                    print("[SYSTEM] Face screenshot and edges captured!")
+                                    print("[SYSTEM] Face screenshot and colors captured!")
                                     
-                                    edge_resized = cv2.resize(captured_edges_image, (240, 240))
-                                    binary = (edge_resized > 127).astype(np.uint8)
-                                    packed = np.packbits(binary)
-                                    b64 = base64.b64encode(packed).decode('utf-8')
+                                    color_resized = cv2.resize(captured_face_image, (240, 240))
+                                    rgb565 = cv2.cvtColor(color_resized, cv2.COLOR_BGR2BGR565)
+                                    b64 = base64.b64encode(rgb565.tobytes()).decode('utf-8')
                                     command_sender.send_image(b64)
                     
                     # Close window when thumb goes down
