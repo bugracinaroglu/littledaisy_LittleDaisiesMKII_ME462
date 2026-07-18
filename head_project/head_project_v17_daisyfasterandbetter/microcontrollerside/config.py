@@ -26,6 +26,7 @@ FACE_LIST = [
     "SURPRISED",
     "DISGUST",
     "SLEEPING",
+    "STANDBY",
     "IDLE",
     "RUNNING",
     "DIZZY",

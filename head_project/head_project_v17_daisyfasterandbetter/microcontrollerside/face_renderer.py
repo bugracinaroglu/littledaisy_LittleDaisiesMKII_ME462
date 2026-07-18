@@ -551,7 +551,10 @@ class FaceRenderer:
             self._draw_disgust(blink)
 
         elif face == "SLEEPING":
-            self._draw_sleeping(blink)
+            self._draw_sleeping(blink, is_standby=False)
+
+        elif face == "STANDBY":
+            self._draw_sleeping(blink, is_standby=True)
 
         elif face == "RUNNING":
             self._draw_running(blink)
@@ -969,7 +972,7 @@ class FaceRenderer:
 
         self._draw_label("DISGUST")
 
-    def _draw_sleeping(self, blink):
+    def _draw_sleeping(self, blink, is_standby=False):
         c = self.FACE_COLOR
 
         cap_color = self.EFFECT_BLUE
@@ -1000,7 +1003,11 @@ class FaceRenderer:
         else:
             self.lcd.text("Z", 200, 22 - shift // 6, c)
 
-        self._draw_label("SLEEP")
+        if is_standby:
+            self._draw_label("STANDBY")
+            self.lcd.text("peace to start", 64, 230, c)
+        else:
+            self._draw_label("SLEEP")
 
     def _draw_running(self, blink):
         c = self.FACE_COLOR

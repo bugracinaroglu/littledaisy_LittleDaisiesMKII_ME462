@@ -259,6 +259,7 @@ SUPPORTED_FACES = [
     "SURPRISED",
     "DISGUST",
     "SLEEPING",
+    "STANDBY",
     "IDLE",
     "RUNNING",
     "DIZZY",

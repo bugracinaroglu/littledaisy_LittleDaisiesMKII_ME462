@@ -433,15 +433,19 @@ def main():
             )
 
             active_mode = mode_manager.get_mode()
-            behavior_commands = behavior_manager.update(
-                target=selected_target,
-                head_mapping_result=head_mapping_result,
-                human_result=human_result,
-                emotion_result=emotion_result,
-                gesture_result=gesture_result,
-                robot_head=robot_head,
-                control_mode=active_mode,
-            )
+            if not system_started:
+                robot_head.show_face("STANDBY")
+                behavior_commands = {}
+            else:
+                behavior_commands = behavior_manager.update(
+                    target=selected_target,
+                    head_mapping_result=head_mapping_result,
+                    human_result=human_result,
+                    emotion_result=emotion_result,
+                    gesture_result=gesture_result,
+                    robot_head=robot_head,
+                    control_mode=active_mode,
+                )
 
             output = frame.copy()
             if not system_started:
