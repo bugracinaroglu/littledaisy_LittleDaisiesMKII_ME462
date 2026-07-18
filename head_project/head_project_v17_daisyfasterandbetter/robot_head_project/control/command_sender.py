@@ -186,11 +186,11 @@ class CommandSender:
     def send_image(self, b64_string):
         return self.send_raw("IMAGE:{}".format(b64_string))
 
-    def send_image_chunked(self, raw_bytes, is_color=False):
-        """Send a large image as Base64 chunks to avoid memory overflow on RP2350."""
+    def send_image_chunked(self, raw_bytes, image_type="RGB565"):
+        """Send a large image as Base64 chunks to avoid memory overflow on RP2350.
+        image_type can be 'MONO', 'GS4', or 'RGB565'."""
         # Send START command with metadata
-        color_flag = 1 if is_color else 0
-        self.send_raw(f"IMAGE_START:{len(raw_bytes)},{color_flag}")
+        self.send_raw(f"IMAGE_START:{len(raw_bytes)},{image_type}")
         time.sleep(0.02)  # Wait for microcontroller to allocate memory
         
         chunk_size = 2048

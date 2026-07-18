@@ -362,10 +362,17 @@ def handle_command(
         import gc
         gc.collect()  # Force cleanup of old buffers before allocating
         size = value.get("size", 0)
-        face_state["image_is_color"] = value.get("color", False)
+        face_state["image_type"] = value.get("image_type", "RGB565")
+        
+        # Handle legacy PC script boolean color flag compatibility
+        if face_state["image_type"] == True or face_state["image_type"] == "1":
+            face_state["image_type"] = "RGB565"
+        elif face_state["image_type"] == False or face_state["image_type"] == "0":
+            face_state["image_type"] = "MONO"
+            
         try:
             face_state["image_buffer"] = bytearray(size)
-            print("Allocated image buffer:", size)
+            print("Allocated image buffer:", size, face_state["image_type"])
         except MemoryError:
             print("OOM for image buffer")
             face_state["image_buffer"] = None
@@ -390,10 +397,28 @@ def handle_command(
             lcd_local = face.lcd
             lcd_local.fill(lcd_local.black)
             
-            if face_state.get("image_is_color", False):
+            image_type = face_state.get("image_type", "RGB565")
+            
+            if image_type == "RGB565":
                 fbuf = framebuf.FrameBuffer(image_buffer, 240, 240, framebuf.RGB565)
                 lcd_local.blit(fbuf, 0, 0)
-            else:
+                
+            elif image_type == "GS4":
+                fbuf = framebuf.FrameBuffer(image_buffer, 240, 240, framebuf.GS4_HMSB)
+                # 16-color RGB565 Palette (Standard 16-color EGA/Mac palette)
+                # Colors in BGR/RGB: Black, White, Red, Green, Blue, Cyan, Magenta, Yellow, 
+                # Orange, Purple, Dark Green, Teal, Navy, Maroon, Gray, Silver.
+                # Converted to 16-bit RGB565 and packed into a bytearray (Big-Endian/Swapped)
+                # Let's write the RGB565 values for these 16 colors:
+                # To save time and keep it simple, we just use a predefined 32-byte array.
+                pal_bytes = bytearray([
+                    0x00, 0x00, 0xFF, 0xFF, 0x00, 0xF8, 0xE0, 0x07, 0x1F, 0x00, 0xFF, 0x07, 0x1F, 0xF8, 0xE0, 0xFF,
+                    0x00, 0xFC, 0x10, 0x84, 0x00, 0x04, 0x10, 0x04, 0x10, 0x00, 0x00, 0x80, 0x10, 0x84, 0x10, 0xC6
+                ])
+                palette = framebuf.FrameBuffer(pal_bytes, 16, 1, framebuf.RGB565)
+                lcd_local.blit(fbuf, 0, 0, -1, palette)
+                
+            else: # Legacy MONO
                 fbuf = framebuf.FrameBuffer(image_buffer, 240, 240, framebuf.MONO_HLSB)
                 palette_data = bytearray([0x00, 0x00, 0xFF, 0xFF])
                 palette = framebuf.FrameBuffer(palette_data, 2, 1, framebuf.RGB565)

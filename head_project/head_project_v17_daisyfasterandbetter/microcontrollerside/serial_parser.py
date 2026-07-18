@@ -187,8 +187,8 @@ class SerialParser:
             parts = payload.split(",")
             try:
                 size = int(parts[0])
-                color = int(parts[1]) if len(parts) > 1 else 0
-                return "IMAGE_START", {"size": size, "color": color == 1}
+                image_type = parts[1].strip() if len(parts) > 1 else "RGB565"
+                return "IMAGE_START", {"size": size, "image_type": image_type}
             except:
                 return "ERROR", cmd
 
