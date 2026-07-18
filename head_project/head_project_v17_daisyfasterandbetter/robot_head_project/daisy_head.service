@@ -1,0 +1,17 @@
+[Unit]
+Description=Daisy Head Vision and Control Service
+After=network.target multi-user.target
+Wants=camera.target
+
+[Service]
+Type=simple
+User=littledaisy
+WorkingDirectory=/home/littledaisy/littledaisy_LittleDaisiesMKII_ME462/head_project/head_project_v17_daisyfasterandbetter/robot_head_project
+ExecStart=/usr/bin/python3 main.py
+Restart=always
+RestartSec=5
+Environment="PYTHONUNBUFFERED=1"
+Environment="DISPLAY=:0"
+
+[Install]
+WantedBy=multi-user.target
