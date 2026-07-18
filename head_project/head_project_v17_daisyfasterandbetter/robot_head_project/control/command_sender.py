@@ -191,14 +191,14 @@ class CommandSender:
         # Send START command with metadata
         color_flag = 1 if is_color else 0
         self.send_raw(f"IMAGE_START:{len(raw_bytes)},{color_flag}")
-        time.sleep(0.05)  # Wait for microcontroller to allocate memory
+        time.sleep(0.02)  # Wait for microcontroller to allocate memory
         
         chunk_size = 2048
         for i in range(0, len(raw_bytes), chunk_size):
             chunk = raw_bytes[i:i+chunk_size]
             b64_chunk = base64.b64encode(chunk).decode('utf-8')
             self.send_raw(f"IMAGE_CHUNK:{i},{b64_chunk}")
-            time.sleep(0.005)  # Prevent USB CDC ring buffer overflow
+            time.sleep(0.001)  # Minimal sleep to prevent ring buffer overflow
             
         # Send END command
         return self.send_raw("IMAGE_END:")
