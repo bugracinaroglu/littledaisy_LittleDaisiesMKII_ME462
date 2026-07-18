@@ -694,9 +694,11 @@ def main():
                                 print(f"[SYSTEM] Circular face captured! Beard: {has_mustache} | Glasses: {has_gl}")
                                 
                                 edge_resized = cv2.resize(captured_edges_image, (240, 240))
-                                rgb565 = cv2.cvtColor(edge_resized, cv2.COLOR_BGR2BGR565)
-                                swapped_bytes = rgb565.view(np.uint16).byteswap().tobytes()
-                                command_sender.send_image_chunked(swapped_bytes, image_type="RGB565")
+                                gray = cv2.cvtColor(edge_resized, cv2.COLOR_BGR2GRAY)
+                                _, binary = cv2.threshold(gray, 127, 1, cv2.THRESH_BINARY)
+                                packed = np.packbits(binary)
+                                b64 = base64.b64encode(packed).decode('utf-8')
+                                command_sender.send_image(b64)
                         else:
                             # Fallback to rectangular if landmarks are missing
                             face_box = None
