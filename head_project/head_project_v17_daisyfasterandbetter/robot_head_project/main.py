@@ -601,8 +601,9 @@ def main():
     captured_rj_status = False
     captured_gl_status = False
     captured_mustache_metrics = {}
-    last_thumb_up = False
     last_thumb_down = False
+    last_b64_image = None
+    last_b64_send_time = 0
 
     print("\n[SYSTEM] Currently in STANDBY mode.")
     print("[SYSTEM] Show a 'Victory' (Peace sign) gesture to start tracking.")
@@ -699,6 +700,8 @@ def main():
                                 packed = np.packbits(binary)
                                 b64 = base64.b64encode(packed).decode('utf-8')
                                 command_sender.send_image(b64)
+                                last_b64_image = b64
+                                last_b64_send_time = time.time()
                         else:
                             # Fallback to rectangular if landmarks are missing
                             face_box = None
@@ -740,6 +743,8 @@ def main():
                                     packed = np.packbits(binary)
                                     b64 = base64.b64encode(packed).decode('utf-8')
                                     command_sender.send_image(b64)
+                                    last_b64_image = b64
+                                    last_b64_send_time = time.time()
                     
                     # Close window when thumb goes down
                     if current_thumb_down and not last_thumb_down:
@@ -762,11 +767,18 @@ def main():
                                 pass
                             print("[SYSTEM] Face window closed.")
                             if command_sender:
-                                command_sender.send_mode(mode_manager.get_mode())
+                                command_sender.send_cancel_gesture()
                                 print("[SYSTEM] Cleared robot screen.")
                             
                     last_thumb_up = current_thumb_up
                     last_thumb_down = current_thumb_down
+                    
+                    # Keep the LCD image alive (the RP2350 has a 6-second lock by default)
+                    if face_window_open and last_b64_image is not None:
+                        if time.time() - last_b64_send_time > 5.0:
+                            if command_sender:
+                                command_sender.send_image(last_b64_image)
+                            last_b64_send_time = time.time()
                 # ---------------------------------
             else:
                 human_result = None
