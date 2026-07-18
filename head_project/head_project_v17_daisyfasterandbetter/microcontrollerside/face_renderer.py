@@ -88,6 +88,7 @@ class FaceRenderer:
             "SURPRISED",
             "DISGUST",
             "SLEEPING",
+            "STANDBY",
             "IDLE",
             "RUNNING",
             "DIZZY",

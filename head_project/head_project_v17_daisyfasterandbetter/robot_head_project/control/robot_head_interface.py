@@ -184,10 +184,14 @@ class RobotHeadInterface:
         hold_ms = self._normalize_hold_ms(hold_ms)
         if hold_ms is None:
             hold_ms = 0
+            
+        mapped_face = "CURIOUS" if face_name == "NEUTRAL" else face_name
+        if mapped_face == self.last_face and hold_ms == 0:
+            return True  # Avoid spamming the same face over serial
+            
         sent = self.command_sender.send_face(face_name, hold_ms=hold_ms)
         if sent:
-            # The RP2350 intentionally renders NEUTRAL as CURIOUS.
-            self.last_face = "CURIOUS" if face_name == "NEUTRAL" else face_name
+            self.last_face = mapped_face
             self.last_text = None
         return self._record("FACE:{}".format(face_name), source, sent)
 
