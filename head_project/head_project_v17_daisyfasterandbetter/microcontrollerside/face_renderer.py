@@ -1006,7 +1006,7 @@ class FaceRenderer:
 
         if is_standby:
             self._draw_label("STANDBY")
-            self.lcd.text("peace to start", 64, 230, c)
+            self.lcd.text("peace to start", 64, 200, c)
         else:
             self._draw_label("SLEEP")
 

@@ -59,14 +59,32 @@ class CommandSender:
             return None
 
         try:
-            connection = serial.Serial(port, self.baudrate, timeout=0)
+            connection = serial.Serial(port, self.baudrate, timeout=0.1)
             time.sleep(2.0)
             connection.reset_input_buffer()
             print("Connected to RP2350:", port)
+            
+            # Start background thread to print RP2350 logs to PC terminal
+            self._reader_thread = threading.Thread(target=self._read_from_serial, args=(connection,), daemon=True)
+            self._reader_thread.start()
+            
             return connection
         except Exception as exc:
             print("Could not open serial port:", exc)
             return None
+
+    def _read_from_serial(self, connection):
+        """Continuously read lines from the RP2350 and print them."""
+        while self.enable_serial and connection is not None:
+            try:
+                if connection.in_waiting > 0:
+                    line = connection.readline().decode('utf-8', errors='ignore').strip()
+                    if line:
+                        print(f"[RP2350] {line}")
+                else:
+                    time.sleep(0.01)
+            except Exception:
+                break
 
     def is_connected(self):
         return self.ser is not None
