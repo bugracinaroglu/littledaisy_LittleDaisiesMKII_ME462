@@ -339,10 +339,18 @@ def handle_command(
             if face is not None and hasattr(face, "lcd"):
                 lcd_local = face.lcd
                 lcd_local.fill(lcd_local.black)
-                # Blit the 1-bit framebuf. 1 will be drawn as white, 0 as black by default
-                lcd_local.blit(fbuf, 0, 0)
+                
+                # Create a 2-color palette mapping 0 to Black and 1 to White
+                # White in RGB565 is 0xFFFF (2 bytes: 0xFF, 0xFF)
+                # Black is 0x0000 (2 bytes: 0x00, 0x00)
+                palette_data = bytearray([0x00, 0x00, 0xFF, 0xFF])
+                palette = framebuf.FrameBuffer(palette_data, 2, 1, framebuf.RGB565)
+                
+                # Blit the 1-bit framebuf using the palette
+                lcd_local.blit(fbuf, 0, 0, -1, palette)
                 lcd_local.show()
                 set_face_lock(face_state, 6000)
+                face_state["image_lock_ms"] = ticks_ms() + 6000
                 print("Image rendered")
         except Exception as e:
             print("Image decode error:", e)
@@ -545,7 +553,8 @@ def run():
             if arms is not None:
                 arms.update()
             if face is not None:
-                face.update()
+                if ticks_ms() > face_state.get("image_lock_ms", 0):
+                    face.update()
 
             idle()
 
