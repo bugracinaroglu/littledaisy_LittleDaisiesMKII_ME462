@@ -338,7 +338,6 @@ def handle_command(
                 lcd_local.fill(lcd_local.black)
                 
                 if len(raw_bytes) == 7200:
-                    # 1-bit Monochrome Image
                     fbuf = framebuf.FrameBuffer(bytearray(raw_bytes), 240, 240, framebuf.MONO_HLSB)
                     palette_data = bytearray([0x00, 0x00, 0xFF, 0xFF])
                     palette = framebuf.FrameBuffer(palette_data, 2, 1, framebuf.RGB565)
@@ -346,7 +345,6 @@ def handle_command(
                     print("1-bit Monochrome Image rendered")
                     
                 elif len(raw_bytes) == 115200:
-                    # 16-bit RGB565 Full Color Image
                     fbuf = framebuf.FrameBuffer(bytearray(raw_bytes), 240, 240, framebuf.RGB565)
                     lcd_local.blit(fbuf, 0, 0)
                     print("16-bit Color Image rendered")
@@ -359,6 +357,52 @@ def handle_command(
                 face_state["image_lock_ms"] = ticks_ms() + 6000
         except Exception as e:
             print("Image decode error:", e)
+
+    elif command_type == "IMAGE_START":
+        size = value.get("size", 0)
+        face_state["image_is_color"] = value.get("color", False)
+        try:
+            face_state["image_buffer"] = bytearray(size)
+            print("Allocated image buffer:", size)
+        except MemoryError:
+            print("OOM for image buffer")
+            face_state["image_buffer"] = None
+
+    elif command_type == "IMAGE_CHUNK":
+        import binascii
+        image_buffer = face_state.get("image_buffer")
+        if image_buffer is not None:
+            offset = value.get("offset", 0)
+            data_b64 = value.get("data", "")
+            try:
+                raw = binascii.a2b_base64(data_b64)
+                image_buffer[offset:offset+len(raw)] = raw
+            except Exception as e:
+                print("Chunk error:", e)
+
+    elif command_type == "IMAGE_END":
+        import framebuf
+        image_buffer = face_state.get("image_buffer")
+        if image_buffer is not None and face is not None and hasattr(face, "lcd"):
+            lcd_local = face.lcd
+            lcd_local.fill(lcd_local.black)
+            
+            if face_state.get("image_is_color", False):
+                fbuf = framebuf.FrameBuffer(image_buffer, 240, 240, framebuf.RGB565)
+                lcd_local.blit(fbuf, 0, 0)
+            else:
+                fbuf = framebuf.FrameBuffer(image_buffer, 240, 240, framebuf.MONO_HLSB)
+                palette_data = bytearray([0x00, 0x00, 0xFF, 0xFF])
+                palette = framebuf.FrameBuffer(palette_data, 2, 1, framebuf.RGB565)
+                lcd_local.blit(fbuf, 0, 0, -1, palette)
+                
+            lcd_local.show()
+            set_face_lock(face_state, 6000)
+            face_state["image_lock_ms"] = ticks_ms() + 6000
+            print("Image fully rendered!")
+            
+            # Free memory
+            face_state["image_buffer"] = None
 
     elif command_type == "GESTURE":
         gesture_name, count, hold_ms = value

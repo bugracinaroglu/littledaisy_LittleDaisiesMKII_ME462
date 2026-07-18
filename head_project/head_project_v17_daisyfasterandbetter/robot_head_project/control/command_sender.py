@@ -1,6 +1,7 @@
 import glob
 import threading
 import time
+import base64
 
 try:
     import serial
@@ -184,6 +185,23 @@ class CommandSender:
 
     def send_image(self, b64_string):
         return self.send_raw("IMAGE:{}".format(b64_string))
+
+    def send_image_chunked(self, raw_bytes, is_color=False):
+        """Send a large image as Base64 chunks to avoid memory overflow on RP2350."""
+        # Send START command with metadata
+        color_flag = 1 if is_color else 0
+        self.send_raw(f"IMAGE_START:{len(raw_bytes)},{color_flag}")
+        time.sleep(0.05)  # Wait for microcontroller to allocate memory
+        
+        chunk_size = 2048
+        for i in range(0, len(raw_bytes), chunk_size):
+            chunk = raw_bytes[i:i+chunk_size]
+            b64_chunk = base64.b64encode(chunk).decode('utf-8')
+            self.send_raw(f"IMAGE_CHUNK:{i},{b64_chunk}")
+            time.sleep(0.005)  # Prevent USB CDC ring buffer overflow
+            
+        # Send END command
+        return self.send_raw("IMAGE_END:")
 
     def send_mode(self, mode_name):
         return self.send_raw("MODE:{}".format(str(mode_name).strip().upper()))

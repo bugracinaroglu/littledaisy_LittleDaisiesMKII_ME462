@@ -361,8 +361,7 @@ def main():
                                 
                                 color_resized = cv2.resize(captured_face_image, (240, 240))
                                 rgb565 = cv2.cvtColor(color_resized, cv2.COLOR_BGR2BGR565)
-                                b64 = base64.b64encode(rgb565.tobytes()).decode('utf-8')
-                                command_sender.send_image(b64)
+                                command_sender.send_image_chunked(rgb565.tobytes(), is_color=True)
                         else:
                             # Fallback to rectangular if landmarks are missing
                             face_box = None
@@ -388,8 +387,7 @@ def main():
                                     
                                     color_resized = cv2.resize(captured_face_image, (240, 240))
                                     rgb565 = cv2.cvtColor(color_resized, cv2.COLOR_BGR2BGR565)
-                                    b64 = base64.b64encode(rgb565.tobytes()).decode('utf-8')
-                                    command_sender.send_image(b64)
+                                    command_sender.send_image_chunked(rgb565.tobytes(), is_color=True)
                     
                     # Close window when thumb goes down
                     if current_thumb_down and not last_thumb_down:

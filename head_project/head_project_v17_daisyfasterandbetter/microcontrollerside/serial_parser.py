@@ -182,6 +182,30 @@ class SerialParser:
         if upper.startswith("IMAGE:"):
             return "IMAGE", cmd[6:].strip()
 
+        if upper.startswith("IMAGE_START:"):
+            payload = cmd[12:].strip()
+            parts = payload.split(",")
+            try:
+                size = int(parts[0])
+                color = int(parts[1]) if len(parts) > 1 else 0
+                return "IMAGE_START", {"size": size, "color": color == 1}
+            except:
+                return "ERROR", cmd
+
+        if upper.startswith("IMAGE_CHUNK:"):
+            # Original command might have lowercase base64, so use cmd not upper
+            payload = cmd[12:].strip()
+            parts = payload.split(",", 1)
+            try:
+                offset = int(parts[0])
+                data = parts[1]
+                return "IMAGE_CHUNK", {"offset": offset, "data": data}
+            except:
+                return "ERROR", cmd
+
+        if upper.startswith("IMAGE_END:"):
+            return "IMAGE_END", None
+
         if upper.startswith("MODE:"):
             return "MODE", cmd[5:].strip().upper()
 
