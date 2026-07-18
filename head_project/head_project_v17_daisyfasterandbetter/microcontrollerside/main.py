@@ -359,6 +359,8 @@ def handle_command(
             print("Image decode error:", e)
 
     elif command_type == "IMAGE_START":
+        import gc
+        gc.collect()  # Force cleanup of old buffers before allocating
         size = value.get("size", 0)
         face_state["image_is_color"] = value.get("color", False)
         try:
@@ -382,6 +384,7 @@ def handle_command(
 
     elif command_type == "IMAGE_END":
         import framebuf
+        import gc
         image_buffer = face_state.get("image_buffer")
         if image_buffer is not None and face is not None and hasattr(face, "lcd"):
             lcd_local = face.lcd
@@ -401,8 +404,9 @@ def handle_command(
             face_state["image_lock_ms"] = ticks_ms() + 6000
             print("Image fully rendered!")
             
-            # Free memory
+            # Free memory immediately and forcefully
             face_state["image_buffer"] = None
+            gc.collect()
 
     elif command_type == "GESTURE":
         gesture_name, count, hold_ms = value
