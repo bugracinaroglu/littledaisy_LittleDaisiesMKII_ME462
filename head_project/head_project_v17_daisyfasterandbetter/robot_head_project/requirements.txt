@@ -1,5 +1,5 @@
 # Raspberry Pi 5 / Raspberry Pi OS Bookworm / Python 3.11
 numpy==1.26.4
-opencv-contrib-python>=5.0.0
+opencv-contrib-python==4.10.0.84
 mediapipe==0.10.18
 pyserial==3.5
