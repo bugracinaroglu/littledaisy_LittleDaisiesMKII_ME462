@@ -9,13 +9,7 @@ from behavior.behavior_manager import BehaviorManager
 from camera import Camera
 from config import *
 
-# --- PC MODE OVERRIDES ---
-CAMERA_BACKEND = "opencv"
-CAMERA_PROFILE = "usb_webcam"
-FISHEYE_CORRECTION_MODE = "none"
-ENABLE_SERIAL = False
-HEADLESS_MODE = False
-# -------------------------
+
 
 from control.command_sender import CommandSender
 from control.control_mode import ControlMode, ControlModeManager

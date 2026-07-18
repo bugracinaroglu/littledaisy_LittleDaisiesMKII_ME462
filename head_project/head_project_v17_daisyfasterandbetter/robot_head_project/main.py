@@ -9,13 +9,7 @@ from behavior.behavior_manager import BehaviorManager
 from camera import Camera
 from config import *
 
-# --- PC MODE OVERRIDES ---
-CAMERA_BACKEND = "opencv"
-CAMERA_PROFILE = "usb_webcam"
-FISHEYE_CORRECTION_MODE = "none"
-ENABLE_SERIAL = False
-HEADLESS_MODE = False
-# -------------------------
+
 
 from control.command_sender import CommandSender
 from control.control_mode import ControlMode, ControlModeManager
@@ -739,9 +733,11 @@ def main():
                                     print(f"[SYSTEM] Face captured! Beard: {has_mustache} | Glasses: {has_gl}")
                                     
                                     edge_resized = cv2.resize(captured_edges_image, (240, 240))
-                                    rgb565 = cv2.cvtColor(edge_resized, cv2.COLOR_BGR2BGR565)
-                                    swapped_bytes = rgb565.view(np.uint16).byteswap().tobytes()
-                                    command_sender.send_image_chunked(swapped_bytes, image_type="RGB565")
+                                    gray = cv2.cvtColor(edge_resized, cv2.COLOR_BGR2GRAY)
+                                    _, binary = cv2.threshold(gray, 127, 1, cv2.THRESH_BINARY)
+                                    packed = np.packbits(binary)
+                                    b64 = base64.b64encode(packed).decode('utf-8')
+                                    command_sender.send_image(b64)
                     
                     # Close window when thumb goes down
                     if current_thumb_down and not last_thumb_down:
